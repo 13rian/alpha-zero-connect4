@@ -24,6 +24,12 @@ class TrainingData:
 
 
     def save_data(self, network):
+        """
+        saves the current training state
+        :param network:     current network
+        :return:
+        """
+
         # save the current network
         torch.save(network, "{}/network_gen_{}.pt".format(network_dir, self.epoch))
 
@@ -33,6 +39,11 @@ class TrainingData:
 
 
     def load_current_net(self):
+        """
+        loads the most recent network
+        :return:
+        """
+
         net_path = "{}/network_gen_{}.pt".format(network_dir, self.epoch)
         net = torch.load(net_path).to(Globals.evaluation_device)
         logger.debug("network loaded from path {}".format(net_path))
@@ -40,6 +51,11 @@ class TrainingData:
 
 
 def load_data():
+    """
+    loads the training data from the state file
+    :return:
+    """
+
     # create a new storage object
     if not os.path.exists(storage_path):
         logger.info("create a new data storage object")

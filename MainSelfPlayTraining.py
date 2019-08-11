@@ -11,7 +11,8 @@ from game.globals import Globals
 import alpha_zero_learning
 import data_storage
 
-# @utils.profile()
+
+# @utils.profile
 def mainTrain():
     # The logger
     utils.init_logger(logging.DEBUG, file_name="log/connect4.log")
@@ -27,9 +28,9 @@ def mainTrain():
 
 
     # define the parameters
-    epoch_count = 6                         # the number of epochs to train the neural network
-    episode_count = 8                    # the number of games that are self-played in one epoch
-    update_count = 8                      # the number the neural net is updated  in one epoch with the experience data
+    epoch_count = 100                         # the number of epochs to train the neural network
+    episode_count = 6144                    # the number of games that are self-played in one epoch
+    update_count = 900                      # the number the neural net is updated  in one epoch with the experience data
     mcts_sim_count = 80                     # the number of simulations for the monte-carlo tree search
     c_puct = 4                              # the higher this constant the more the mcts explores
     temp = 1                                # the temperature, controls the policy value distribution
