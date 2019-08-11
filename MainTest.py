@@ -1,4 +1,5 @@
 import time
+import pickle
 
 import numpy as np
 from game import connect4
@@ -78,3 +79,30 @@ board.print()
 board.play_move(31)
 board.print()
 
+
+class Data:
+    def __init__(self, param1, param2):
+        self.param1 = param1
+        self.param2 = param2
+
+
+class Test:
+    def __init__(self, param1, param2, data):
+        self.param1 = param1
+        self.param2 = param2
+        self.param3 = np.array([1,2,3,4,5,6])
+        self.param1 = data
+
+
+test = Test(2, [1, 2, 3, 4, 5], Data(4, 5))
+
+
+with open('data_test.pkl', 'wb') as output:
+    pickle.dump(test, output, pickle.HIGHEST_PROTOCOL)
+
+
+
+with open('data_test.pkl', 'rb') as input:
+    test_load = pickle.load(input)
+
+print(test_load.param3)

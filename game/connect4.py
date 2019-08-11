@@ -303,42 +303,6 @@ class BitBoard:
 #################################################################################################
 #                                       test methods                                            #
 #################################################################################################
-
-def net_against_random(net, network_color, c_puct, mcts_sim_count, game_count):
-    """
-    let the alpha zero network play against an opponent that just makes random moves
-    :param net:             the trained network
-    :param network_color:   the color of the network
-    :param c_puct:          constant that controls the exploration in the mcts
-    :param mcts_sim_count:  number of simulations in the mcts
-    :param game_count:      the number of games to play
-    :return:                the fraction of point the network got against a random player
-    """
-
-    score = 0
-    for _ in range(game_count):
-        board = BitBoard()
-        mcts_agent = mcts.MCTS(c_puct)
-        while not board.terminal:
-            if board.player == network_color:
-                policy = mcts_agent.policy_values(board, net, mcts_sim_count, 0)
-                policy_idx = np.where(policy == 1)[0]
-                move = connect4.move_list[policy_idx]
-                board.play_move(move)
-            else:
-                move = board.random_move()
-                board.play_move(move)
-
-            # board.print()
-
-        network_score = board.reward() if network_color == CONST.WHITE else -board.reward()
-        network_score = (network_score + 1) / 2
-        score += network_score
-
-    return score / game_count
-
-
-
 def move_to_policy_idx(move):
     """
     returns the policy index of the passed move

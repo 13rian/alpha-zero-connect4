@@ -1,5 +1,6 @@
 .idea
 *.pt
+*.pkl
 /log
 log/
 __pycache__/

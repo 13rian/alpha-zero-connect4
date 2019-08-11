@@ -9,12 +9,6 @@ from game.globals import Globals
 import alpha_zero_learning
 
 
-
-
-
-
-
-
 # set the random seed
 random.seed(a=None, version=2)
 
@@ -25,7 +19,7 @@ episode_count = 100                 # the number of games that are self-played i
 update_count = 10                   # the number the neural net is updated  in one epoch with the experience data
 network_duel_game_count = 40        # number of games that are played between the old and the new network
 mcts_sim_count = 15                 # the number of simulations for the monte-carlo tree search
-c_puct = 1                          # the higher this constant the more the mcts explores
+c_puct = 4                          # the higher this constant the more the mcts explores
 temp = 1                            # the temperature, controls the policy value distribution
 temp_threshold = 5                  # up to this move the temp will be temp, otherwise 0 (deterministic play)
 new_net_win_rate = 0.55             # win rate of the new network in order to replace the old one
@@ -35,7 +29,8 @@ exp_buffer_size = 2*9*episode_count   # the size of the experience replay buffer
 network_dir = "networks/"           # directory in which the networks are saved
 
 # define the devices for the training and the target networks     cpu or cuda, here cpu is way faster for small nets
-Globals.device = torch.device('cpu')
+Globals.evaluation_device = torch.device('cpu')
+Globals.training_device = torch.device('cuda')
 
 
 
@@ -48,11 +43,11 @@ path_list.sort(key=utils.natural_keys)
 
 # get the best network
 best_network_path = network_dir + path_list[12]
-best_net = torch.load(best_network_path).to(Globals.device)
+best_net = torch.load(best_network_path).to(Globals.evaluation_device)
 for i in range(len(path_list)):
     generation.append(i)
     net_path = network_dir + path_list[i]
-    net = torch.load(net_path).to(Globals.device)
+    net = torch.load(net_path).to(Globals.evaluation_device)
 
     print("play {} against the best network {}".format(net_path, best_network_path))
     # random_net = alpha_zero_learning.Network(learning_rate)
