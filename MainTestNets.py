@@ -14,7 +14,7 @@ random.seed(a=None, version=2)
 
 
 # define the parameters
-epoch_count = 170                   # the number of epochs to train the neural network
+epoch_count = 90                   # the number of epochs to train the neural network
 episode_count = 100                 # the number of games that are self-played in one epoch
 update_count = 10                   # the number the neural net is updated  in one epoch with the experience data
 network_duel_game_count = 40        # number of games that are played between the old and the new network
@@ -42,7 +42,7 @@ path_list = os.listdir(network_dir)
 path_list.sort(key=utils.natural_keys)
 
 # get the best network
-best_network_path = network_dir + path_list[12]
+best_network_path = network_dir + path_list[-1]
 best_net = torch.load(best_network_path).to(Globals.evaluation_device)
 for i in range(len(path_list)):
     generation.append(i)

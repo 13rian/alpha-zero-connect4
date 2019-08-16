@@ -34,10 +34,11 @@ class AlphaZeroPlayer:
         self.mcts_player = mcts.MCTS(c_puct)
         self.mcts_sim_count = mcts_sim_count
         self.temp = temp
+        self.position_cache = {}
 
 
     def play_move(self, board):
-        policy = self.mcts_player.policy_values(board, self.net, self.mcts_sim_count, self.temp)
+        policy = self.mcts_player.policy_values(board, self.position_cache, self.net, self.mcts_sim_count, self.temp)
         policy_idx = np.where(policy == 1)[0]
         move = connect4.move_list[policy_idx]
         board.play_move(move)

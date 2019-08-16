@@ -1,3 +1,4 @@
+from multiprocessing import Process, Manager
 import numpy as np
 
 import torch
@@ -164,14 +165,14 @@ class Agent:
             self_play_results = [__self_play_worker__(self.network, self.mcts_sim_count,
                                                       self.c_puct, temp_threshold, self.temp, alpha_dirich, game_count)]
         else:
+            # create the shared dict for the position cache
+            manager = Manager()
+            position_cache = manager.dict()
+
             games_per_process = int(game_count / Globals.n_pool_processes)
-
-            # for k, v in self.network.state_dict().items():
-            #     print(v.is_cuda)
-            # self.network.share_memory()
-
             self_play_results = Globals.pool.starmap(__self_play_worker__,
                                                       zip([self.network] * Globals.n_pool_processes,
+                                                          [position_cache] * Globals.n_pool_processes,
                                                           [self.mcts_sim_count] * Globals.n_pool_processes,
                                                           [self.c_puct] * Globals.n_pool_processes,
                                                           [temp_threshold] * Globals.n_pool_processes,
@@ -325,10 +326,11 @@ def net_vs_net(net1, net2, game_count, mcts_sim_count, c_puct, temp):
     return score1
 
 
-def __self_play_worker__(net, mcts_sim_count, c_puct, temp_threshold, temp, alpha_dirich, game_count):
+def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_threshold, temp, alpha_dirich, game_count):
     """
     plays a number of self play games
     :param net:                 the alpha zero network
+    :param position_cache:      holds positions already evaluated by the network
     :param mcts_sim_count:      the monte carlo simulation count
     :param c_puct:              constant that controls the exploration
     :param temp_threshold:      up to this move count the temperature will be temp, later it will be 0
@@ -341,6 +343,7 @@ def __self_play_worker__(net, mcts_sim_count, c_puct, temp_threshold, temp, alph
     state_list = []
     policy_list = []
     value_list = []
+    # position_cache = {}   # give each simulation its own state dict
 
     for i in range(game_count):
         board = connect4.BitBoard()
@@ -353,11 +356,12 @@ def __self_play_worker__(net, mcts_sim_count, c_puct, temp_threshold, temp, alph
         while not board.terminal:
             state, player = board.white_perspective()
             temp = 0 if move_count >= temp_threshold else temp
-            policy = mcts.policy_values(board, net, mcts_sim_count, temp, alpha_dirich)
+            policy = mcts.policy_values(board, position_cache, net, mcts_sim_count, temp, alpha_dirich)
 
             # sample from the policy to determine the move to play
             move = np.random.choice(connect4.move_list, p=policy)
             board.play_move(move)
+            # board.print()
 
             # save the training example
             state_list.append(state)

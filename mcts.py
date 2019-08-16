@@ -23,11 +23,12 @@ class MCTS:
         
         
     
-    def policy_values(self, board, net, mc_sim_count, temp, alpha_dirich=0):
+    def policy_values(self, board, position_cache, net, mc_sim_count, temp, alpha_dirich=0):
         """
         executes mc_sim_count number of monte-carlo simulations to obtain the probability
         vector of the current game position
         :param board:            the game board
+        :param position_cache:   holds positions already evaluated by the network
         :param net:              neural network that approximates the policy and the value
         :param mc_sim_count:     number of monte-carlo simulations to perform
         :param temp:             the temperature, determines the degree of exploration
@@ -41,7 +42,7 @@ class MCTS:
         # perform the tree search
         for _ in range(mc_sim_count):
             sim_board = board.clone()
-            self.tree_search(sim_board, net, alpha_dirich)
+            self.tree_search(sim_board, position_cache, net, alpha_dirich)
 
         s = board.state_id()
         counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in connect4.move_list]
@@ -60,7 +61,7 @@ class MCTS:
     
         
         
-    def tree_search(self, board, net, alpha_dirich=0):
+    def tree_search(self, board, position_cache, net, alpha_dirich=0):
         """
         Performs one iteration of the monte-carlo tree search.
         The method is recursively called until a leaf node is found. This is a game
@@ -72,9 +73,10 @@ class MCTS:
         
         The method returns the estimated value of the current game state. The sign of the value
         is flipped because the value of the game for the other player is the negative value of
-        the state of the current player          
-        :param net:             neural network that approximates the policy and the value
+        the state of the current player
         :param board:           represents the game
+        :param position_cache:  holds positions already evaluated by the network
+        :param net:             neural network that approximates the policy and the value
         :param alpha_dirich:    alpha parameter for the dirichlet noise that is added to the root node probabilities
         :return: 
         """
@@ -89,9 +91,18 @@ class MCTS:
         if s not in self.P:  
             batch, _ = board.white_perspective()
             batch = torch.Tensor(batch).unsqueeze(0).to(Globals.evaluation_device)
-            self.P[s], v = net(batch)
-            self.P[s] = self.P[s].detach().squeeze().numpy()
-            v = v.item()
+
+            # check if the position is in the position cache
+            if s in position_cache:
+                net_values = position_cache[s]
+                self.P[s] = net_values[0]
+                v = net_values[1]
+
+            else:
+                self.P[s], v = net(batch)
+                self.P[s] = self.P[s].detach().squeeze().numpy()
+                v = v.item()
+                position_cache[s] = (self.P[s], v)
             
             # ensure that the summed probability of all valid moves is 1
             legal_moves = np.array(board.legal_moves)
@@ -143,7 +154,7 @@ class MCTS:
         
         a = action
         board.play_move(a)
-        v = self.tree_search(board, net)
+        v = self.tree_search(board, position_cache, net)
         
         
         # update the Q and N values

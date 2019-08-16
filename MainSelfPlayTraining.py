@@ -28,16 +28,16 @@ def mainTrain():
 
 
     # define the parameters
-    epoch_count = 100                         # the number of epochs to train the neural network
-    episode_count = 6144                    # the number of games that are self-played in one epoch
-    update_count = 900                      # the number the neural net is updated  in one epoch with the experience data
+    epoch_count = 7                         # the number of epochs to train the neural network
+    episode_count = 61                    # the number of games that are self-played in one epoch
+    update_count = 90                      # the number the neural net is updated  in one epoch with the experience data
     mcts_sim_count = 80                     # the number of simulations for the monte-carlo tree search
     c_puct = 4                              # the higher this constant the more the mcts explores
     temp = 1                                # the temperature, controls the policy value distribution
     temp_threshold = 36                     # up to this move the temp will be temp, otherwise 0 (deterministic play)
-    alpha_dirich = 1  # alpha parameter for the dirichlet noise (0.03 - 0.3 az paper, 10/ avg n_moves)
+    alpha_dirich = 0.3     # alpha parameter for the dirichlet noise (0.03 - 0.3 az paper, 10/ avg n_moves)
     n_filters = 128                         # the number of filters in the conv layers
-    learning_rate = 0.005                   # the learning rate of the neural network
+    learning_rate = 0.01                   # the learning rate of the neural network
     batch_size = 256                        # the batch size of the experience buffer for the neural network training
     exp_buffer_size = 2*36*episode_count    # the size of the experience replay buffer
 
