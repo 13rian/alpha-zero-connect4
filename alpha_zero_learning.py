@@ -144,6 +144,7 @@ class Agent:
         self.network = Network(learning_rate, n_filters)             # the network
 
         self.board = connect4.BitBoard()                             # connect4 board
+        self.exp_buffer_size = exp_buffer_size                       # the size of the experience buffer
         self.experience_buffer = ExperienceBuffer(exp_buffer_size)   # buffer that saves all experiences
 
         # activate the evaluation mode of the networks
@@ -151,7 +152,12 @@ class Agent:
         self.network.to(Globals.evaluation_device)
 
 
+    def clear_experience_buffer(self):
+        self.experience_buffer = ExperienceBuffer(self.exp_buffer_size)
 
+
+    # from utils import utils
+    # @utils.profile
     def play_self_play_games(self, game_count, temp_threshold, alpha_dirich=0):
         """
         plays some games against itself and adds the experience into the experience buffer
@@ -162,7 +168,8 @@ class Agent:
         """
 
         if Globals.pool is None:
-            self_play_results = [__self_play_worker__(self.network, self.mcts_sim_count,
+            position_cache = {}
+            self_play_results = [__self_play_worker__(self.network, position_cache, self.mcts_sim_count,
                                                       self.c_puct, temp_threshold, self.temp, alpha_dirich, game_count)]
         else:
             # create the shared dict for the position cache
@@ -359,7 +366,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             policy = mcts.policy_values(board, position_cache, net, mcts_sim_count, temp, alpha_dirich)
 
             # sample from the policy to determine the move to play
-            move = np.random.choice(connect4.move_list, p=policy)
+            move = np.random.choice(connect4.policy_to_move_list, p=policy)
             board.play_move(move)
             # board.print()
 

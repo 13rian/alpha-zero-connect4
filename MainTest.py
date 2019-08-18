@@ -4,6 +4,15 @@ import pickle
 import numpy as np
 from game import connect4
 
+
+
+a = np.array([0,1,2,3,4,5,-1,6,7,8,9,10,11,12,-1])
+b = np.array([0,1,2,3,4,5,7,8,9,10,11,12])
+c = a[b]
+print(c)
+
+
+
 # play 4 random moves and print the board
 board = connect4.BitBoard()
 move = board.random_move()

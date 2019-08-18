@@ -22,22 +22,23 @@ def mainTrain():
     # set the random seed
     random.seed(a=None, version=2)
 
-    # initialize the pool
+    # # initialize the pool
     Globals.n_pool_processes = mp.cpu_count()
     Globals.pool = mp.Pool(processes=Globals.n_pool_processes)
 
 
     # define the parameters
-    epoch_count = 7                         # the number of epochs to train the neural network
-    episode_count = 61                    # the number of games that are self-played in one epoch
-    update_count = 90                      # the number the neural net is updated  in one epoch with the experience data
+    epoch_count = 12                         # the number of epochs to train the neural network
+    episode_count = 6144                    # the number of games that are self-played in one epoch 6144
+    update_count = 900                      # the number the neural net is updated  in one epoch with the experience data 900
+    evaluation_game_count = 100             # the number of games to play against the random player
     mcts_sim_count = 80                     # the number of simulations for the monte-carlo tree search
-    c_puct = 4                              # the higher this constant the more the mcts explores
+    c_puct = 4                              # the higher this constant the more the mcts explores 4
     temp = 1                                # the temperature, controls the policy value distribution
     temp_threshold = 36                     # up to this move the temp will be temp, otherwise 0 (deterministic play)
     alpha_dirich = 0.3     # alpha parameter for the dirichlet noise (0.03 - 0.3 az paper, 10/ avg n_moves)
-    n_filters = 128                         # the number of filters in the conv layers
-    learning_rate = 0.01                   # the learning rate of the neural network
+    n_filters = 64                         # the number of filters in the conv layers 128
+    learning_rate = 0.005                   # the learning rate of the neural network
     batch_size = 256                        # the batch size of the experience buffer for the neural network training
     exp_buffer_size = 2*36*episode_count    # the size of the experience replay buffer
 
@@ -63,6 +64,14 @@ def mainTrain():
 
     start_training = time.time()
     for i in range(training_data.epoch, epoch_count, 1):
+        # ###### play against random
+        # white_score = agent.play_against_random(CONST.WHITE, evaluation_game_count)
+        # logger.info("white score vs random: {}".format(white_score))
+        #
+        # black_score = agent.play_against_random(CONST.BLACK, evaluation_game_count)
+        # logger.info("black score vs random: {}".format(black_score))
+
+
         ###### self play and update: create some game data through self play
         logger.info("start playing games in epoch {}".format(i))
         agent.play_self_play_games(episode_count, temp_threshold, alpha_dirich)

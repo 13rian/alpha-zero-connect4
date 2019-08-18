@@ -45,7 +45,7 @@ class MCTS:
             self.tree_search(sim_board, position_cache, net, alpha_dirich)
 
         s = board.state_id()
-        counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in connect4.move_list]
+        counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in connect4.policy_to_move_list]
 
         # in order to learn something set the probabilities of the best action to 1 and all other action to 0
         if temp == 0:
@@ -107,9 +107,8 @@ class MCTS:
             # ensure that the summed probability of all valid moves is 1
             legal_moves = np.array(board.legal_moves)
             legal_move_indices = np.zeros(CONST.NN_POLICY_SIZE)
-            for move in legal_moves:
-                idx = connect4.move_to_policy_idx(move)
-                legal_move_indices[idx] = 1
+            idx = connect4.move_to_policy_list[legal_moves]
+            legal_move_indices[idx] = 1
 
             self.P[s] = self.P[s] * legal_move_indices
             total_prob = np.sum(self.P[s])
@@ -130,9 +129,9 @@ class MCTS:
             p_s = np.copy(p_s)
             alpha_params = alpha_dirich * np.ones(len(board.legal_moves))
             dirichlet_noise = np.random.dirichlet(alpha_params)
-            for counter, move in enumerate(board.legal_moves):
-                idx = connect4.move_to_policy_idx(move)
-                p_s[idx] = 0.75 * p_s[idx] + 0.25 * dirichlet_noise[counter]
+            legal_moves = np.array(board.legal_moves)
+            idx = connect4.move_to_policy_list[legal_moves]
+            p_s[idx] = 0.75 * p_s[idx] + 0.25 * dirichlet_noise
 
             # normalize the probabilities again
             total_prob = np.sum(p_s)
@@ -142,7 +141,7 @@ class MCTS:
         max_ucb = -float("inf")
         action = -1
         for a in board.legal_moves:
-            policy_idx = connect4.move_to_policy_idx(a)
+            policy_idx = connect4.move_to_policy_list[a]
             if (s, a) in self.Q:
                 u = self.Q[(s, a)] + self.c_puct*p_s[policy_idx]*math.sqrt(self.N_s[s]) / (1+self.N_sa[(s, a)])
             else:

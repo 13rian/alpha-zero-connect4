@@ -5,12 +5,10 @@ import numpy as np
 
 from utils import utils
 from game.globals import CONST
-from game import connect4
-import mcts
 
 
-move_list = None                  # holds all moves in the same order as the policy vector from the network
-move_to_policy_dict = None        # key: move, value: policy index
+move_to_policy_list = []        # index corresponds to the move and the value is the policy index
+policy_to_move_list = []        # index corresponds to the policy index and the value is the move (list of all moves)
 
 
 class BitBoard:
@@ -303,48 +301,31 @@ class BitBoard:
 #################################################################################################
 #                                       test methods                                            #
 #################################################################################################
-def move_to_policy_idx(move):
+def define_policy_move_lists():
     """
-    returns the policy index of the passed move
-    :param move:   move
+    defines the list to convert policy index to move and vice versa
     :return:
     """
-    global move_to_policy_dict
-    return move_to_policy_dict.get(move)
+    global move_to_policy_list
+    global policy_to_move_list
 
-
-def policy_idx_to_move(index):
-    """
-    returns the move that corresponds to the passed policy index
-    :param index:   policy value index
-    :return:
-    """
-    global policy_to_move_dict
-    return policy_to_move_dict.get(index)
-
-
-def define_policy_move_dicts():
-    """
-    defines the list that holds the move in the same order as the policy output from the network
-    :return:
-    """
-    global move_to_policy_dict
-    global policy_to_move_dict
-    global move_list
-
-    move_to_policy_dict = {}
-    move_list = []
+    move_to_policy_list = []
+    policy_to_move_list = []
 
     policy_idx = 0
     for i in range(41):
         if i % 7 is not 6:
-            move_to_policy_dict[i] = policy_idx
-            move_list.append(i)
+            move_to_policy_list.append(policy_idx)
             policy_idx += 1
 
-    move_list = np.array(move_list)
+            policy_to_move_list.append(i)
+        else:
+            move_to_policy_list.append(-1)
 
 
 
+    move_to_policy_list = np.array(move_to_policy_list)
+    policy_to_move_list = np.array(policy_to_move_list)
 
-define_policy_move_dicts()
+
+define_policy_move_lists()
