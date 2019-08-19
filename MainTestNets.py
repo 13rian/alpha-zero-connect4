@@ -7,6 +7,7 @@ from utils import utils
 
 from game.globals import Globals
 import alpha_zero_learning
+import data_storage
 
 
 # set the random seed
@@ -43,11 +44,12 @@ path_list.sort(key=utils.natural_keys)
 
 # get the best network
 best_network_path = network_dir + path_list[-1]
-best_net = torch.load(best_network_path).to(Globals.evaluation_device)
+best_net = data_storage.load_net(best_network_path, Globals.evaluation_device)
 for i in range(len(path_list)):
     generation.append(i)
     net_path = network_dir + path_list[i]
-    net = torch.load(net_path).to(Globals.evaluation_device)
+    net = data_storage.load_net(net_path, Globals.evaluation_device)
+
 
     print("play {} against the best network {}".format(net_path, best_network_path))
     # random_net = alpha_zero_learning.Network(learning_rate)

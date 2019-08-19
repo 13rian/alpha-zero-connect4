@@ -1,5 +1,6 @@
 from multiprocessing import Process, Manager
 import numpy as np
+import logging
 
 import torch
 import torch.nn as nn
@@ -10,14 +11,17 @@ from game import connect4
 from game.globals import Globals, CONST
 from game import tournament
 from mcts import MCTS
+import data_storage
 
+logger = logging.getLogger('Connect4')
 
 class Network(nn.Module):
 
-    def __init__(self, learning_rate, n_filters):
+    def __init__(self, learning_rate, n_filters, dropout):
         super(Network, self).__init__()
 
         self.n_channels = n_filters
+        self.dropout = dropout
 
         # convolutional layers
         self.conv1 = nn.Conv2d(2, n_filters, kernel_size=3, padding=(1, 1), stride=1)           # baord 6x6
@@ -75,11 +79,13 @@ class Network(nn.Module):
         x = self.fc1(x)
         x = self.fc_bn1(x)
         x = F.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
 
         # fc layer 2
         x = self.fc2(x)
         x = self.fc_bn2(x)
         x = F.relu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
 
         # policy
         p = self.fc3p(x)
@@ -124,7 +130,7 @@ class Network(nn.Module):
 
 
 class Agent:
-    def __init__(self, learning_rate, n_filters, mcts_sim_count, c_puct, temp, batch_size, exp_buffer_size):
+    def __init__(self, learning_rate, n_filters, dropout, mcts_sim_count, c_puct, temp, batch_size, exp_buffer_size):
         """
         :param learning_rate:       learning rate for the neural network
         :param n_filters:           the number of filters in the convolutional layers
@@ -141,15 +147,15 @@ class Agent:
         self.c_puct = c_puct                                         # the higher this constant the more the mcts explores
         self.temp = temp                                             # the temperature, controls the policy value distribution
         self.batch_size = batch_size                                 # the size of the experience replay buffer
-        self.network = Network(learning_rate, n_filters)             # the network
+        self.network = Network(learning_rate, n_filters, dropout)    # the network
 
         self.board = connect4.BitBoard()                             # connect4 board
         self.exp_buffer_size = exp_buffer_size                       # the size of the experience buffer
         self.experience_buffer = ExperienceBuffer(exp_buffer_size)   # buffer that saves all experiences
 
         # activate the evaluation mode of the networks
+        data_storage.net_to_device(self.network, Globals.evaluation_device)
         self.network.eval()
-        self.network.to(Globals.evaluation_device)
 
 
     def clear_experience_buffer(self):
@@ -161,10 +167,11 @@ class Agent:
     def play_self_play_games(self, game_count, temp_threshold, alpha_dirich=0):
         """
         plays some games against itself and adds the experience into the experience buffer
+        :param game_count:      the number of games to play
         :param temp_threshold:  up to this move the temp will be temp, after the threshold it will be set to 0
                                 plays a game against itself with some exploratory moves in it
         :param alpha_dirich     alpha parameter for the dirichlet noise that is added to the root node
-        :return:
+        :return:                the average nu,ber of moves played in a game
         """
 
         if Globals.pool is None:
@@ -188,46 +195,77 @@ class Agent:
                                                           [games_per_process] * Globals.n_pool_processes))
 
         # add the training examples to the experience buffer
+        logger.info("start to augment the training examples by using the game symmetry")
+        tot_moves_played = 0
         for sample in self_play_results:
             state = torch.Tensor(sample[0]).to(Globals.training_device)
             policy = torch.Tensor(sample[1]).reshape(-1, CONST.NN_POLICY_SIZE).to(Globals.training_device)
             value = torch.Tensor(sample[2]).unsqueeze(1).to(Globals.training_device)
+            policy_matrix = policy.reshape((-1, 6, 6))
+            tot_moves_played += state.shape[0]
+
+            for i in range(4):
+                # rotate it
+                new_state = torch.rot90(state, i, (2, 3))
+                new_policy = torch.rot90(policy_matrix, i, (1, 2))
+                new_policy_vec = new_policy.reshape((-1, 36))
+                self.experience_buffer.add_batch(new_state, new_policy_vec, value)
+
+                # flip it horizontally
+                new_state = torch.flip(new_state, [2])
+                new_policy = torch.flip(new_policy, [1])
+                new_policy_vec = new_policy.reshape((-1, 36))
+                self.experience_buffer.add_batch(new_state, new_policy_vec, value)
+
+
+            # state = torch.Tensor(sample[0]).to(Globals.training_device)
+            # policy = torch.Tensor(sample[1]).reshape(-1, CONST.NN_POLICY_SIZE).to(Globals.training_device)
+            # value = torch.Tensor(sample[2]).unsqueeze(1).to(Globals.training_device)
 
             self.experience_buffer.add_batch(state, policy, value)
+
+        avg_game_length = tot_moves_played / game_count
+        return avg_game_length
             
 
 
-    def nn_update(self, update_count):
+    def nn_update(self, epoch_count):
         """
         updates the neural network by picking a random batch form the experience replay
-        :param update_count:    defines how many time the network is updated
+        :param epoch_count:     number of times to pass all training examples through the network
         :return:                average policy and value loss over all mini batches
         """
 
         # activate the training mode
+        self.network = data_storage.net_to_device(self.network, Globals.training_device)
         self.network.train()
-        self.network.to(Globals.training_device)
 
         avg_loss_p = 0
         avg_loss_v = 0
-        for i in range(update_count):
-            # get a random batch
-            states, policies, values = self.experience_buffer.random_batch(self.batch_size)
-            # states = states.to(Globals.training_device)
-            # policies = policies.to(Globals.training_device)
-            # values = values.to(Globals.training_device)
+        tot_batch_count = 0
+        for epoch in range(epoch_count):
+            # shuffle all training examples
+            num_training_examples = self.experience_buffer.size - (self.experience_buffer.size % self.batch_size)
+            states, policies, values = self.experience_buffer.random_batch(num_training_examples)
 
-            # train the net with one mini-batch
-            loss_p, loss_v = self.network.train_step(states, policies, values)
-            avg_loss_p += loss_p
-            avg_loss_v += loss_v
+            # train the network with all training examples
+            num_batches = int(num_training_examples / self.batch_size)
+            for batch_num in range(num_batches):
+                start_batch = batch_num * self.batch_size
+                end_batch = (batch_num+1) * self.batch_size
+                loss_p, loss_v = self.network.train_step(states[start_batch:end_batch],
+                                                         policies[start_batch:end_batch],
+                                                         values[start_batch:end_batch])
+                avg_loss_p += loss_p
+                avg_loss_v += loss_v
+                tot_batch_count += 1
 
         # calculate the mean of the loss
-        avg_loss_p /= update_count
-        avg_loss_v /= update_count
+        avg_loss_p /= tot_batch_count
+        avg_loss_v /= tot_batch_count
 
         # activate the evaluation mode
-        self.network.to(Globals.evaluation_device)
+        self.network = data_storage.net_to_device(self.network, Globals.evaluation_device)
         self.network.eval()
 
         return avg_loss_p.item(), avg_loss_v.item()

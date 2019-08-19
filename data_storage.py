@@ -10,6 +10,7 @@ from game.globals import Globals
 logger = logging.getLogger('TrainingData')
 storage_path = "training_data.pkl"
 network_dir = "networks"
+temp_dir = "temp_net"
 
 
 class TrainingData:
@@ -17,10 +18,11 @@ class TrainingData:
         """
         holds the current state of the training progress
         """
-        self.epoch = 0
-        self.policy_loss = []
-        self.value_loss = []
-        self.experience_buffer = None
+        self.cycle = 0                  # iteration cycles
+        self.avg_moves_played = []      # the average number of moves played in the self-play games
+        self.policy_loss = []           # policy training loss
+        self.value_loss = []            # value training loss
+        self.experience_buffer = None   # buffer with the self-play game data
 
 
     def save_data(self, network):
@@ -31,7 +33,7 @@ class TrainingData:
         """
 
         # save the current network
-        torch.save(network, "{}/network_gen_{}.pt".format(network_dir, self.epoch))
+        torch.save(network, "{}/network_gen_{}.pt".format(network_dir, self.cycle))
 
         # dump the storage object to file
         with open(storage_path, 'wb') as output:
@@ -44,8 +46,9 @@ class TrainingData:
         :return:
         """
 
-        net_path = "{}/network_gen_{}.pt".format(network_dir, self.epoch)
-        net = torch.load(net_path).to(Globals.evaluation_device)
+        net_path = "{}/network_gen_{}.pt".format(network_dir, self.cycle)
+        net = load_net(net_path, Globals.evaluation_device)
+        net.eval()
         logger.debug("network loaded from path {}".format(net_path))
         return net
 
@@ -73,4 +76,54 @@ def load_data():
         return training_data
 
 
+def net_to_device(net, device):
+    """
+    sends the network to the passed device
+    :param net:     the network to transfer into the cpu
+    :param device:  the device to which the network is sent
+    :return:
+    """
+    net_path = "{}/temp_net.pt".format(temp_dir)
+
+    # ensure that the temp dir exists and is empty and
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    os.makedirs(temp_dir)
+
+
+    # put the model on the gpu
+    if device.type == "cuda":
+        torch.save(net, net_path)
+        cpu_net = torch.load(net_path, map_location='cuda')
+        shutil.rmtree(temp_dir)
+        return cpu_net
+
+    # put the model on the cpu
+    if device.type == "cpu":
+        torch.save(net, net_path)
+        cpu_net = torch.load(net_path, map_location='cpu')
+        shutil.rmtree(temp_dir)
+        return cpu_net
+
+    logger.error("device type {} is not known".format(device.type))
+    return None
+
+
+def load_net(net_path, device):
+    """
+    loads the network to the passed device
+    :param net_path:    the path of the network to load
+    :param device:      the device to which the network is loaded
+    :return:
+    """
+
+    # put the model on the gpu
+    if device.type == "cuda":
+        cpu_net = torch.load(net_path, map_location='cuda')
+        return cpu_net
+
+    # put the model on the cpu
+    if device.type == "cpu":
+        cpu_net = torch.load(net_path, map_location='cpu')
+        return cpu_net
 
