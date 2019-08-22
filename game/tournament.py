@@ -1,6 +1,7 @@
 from game.globals import CONST
 from game import connect4
 import numpy as np
+import copy
 
 import mcts
 
@@ -39,8 +40,13 @@ class AlphaZeroPlayer:
 
     def play_move(self, board):
         policy = self.mcts_player.policy_values(board, self.position_cache, self.net, self.mcts_sim_count, self.temp)
-        policy_idx = np.where(policy == 1)[0]
-        move = connect4.policy_to_move_list[policy_idx]
+        if self.temp == 0:
+            policy_idx = np.where(policy == 1)[0]
+            move = connect4.policy_to_move_list[policy_idx]
+
+        else:
+            move = np.random.choice(connect4.policy_to_move_list, p=policy)
+
         board.play_move(move)
 
 
@@ -93,14 +99,18 @@ def play_match(game_count, player1, player2):
     half_game_count = int(game_count / 2)
     score_player1 = 0
 
+    # clone the players in order to play have the same match conditions if the colors are switched
+    player1_clone = copy.deepcopy(player1)
+    player2_clone = copy.deepcopy(player2)
+
     for _ in range(half_game_count):
         # play half the games where player1 is white
         board = connect4.BitBoard()
         while not board.terminal:
             if board.player == CONST.WHITE:
-                player1.play_move(board)
+                player1_clone.play_move(board)
             else:
-                player2.play_move(board)
+                player2_clone.play_move(board)
 
         score_player1 += board.white_score()
 

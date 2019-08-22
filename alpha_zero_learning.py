@@ -15,8 +15,8 @@ import data_storage
 
 logger = logging.getLogger('Connect4')
 
-class Network(nn.Module):
 
+class Network(nn.Module):
     def __init__(self, learning_rate, n_filters, dropout):
         super(Network, self).__init__()
 
@@ -24,10 +24,10 @@ class Network(nn.Module):
         self.dropout = dropout
 
         # convolutional layers
-        self.conv1 = nn.Conv2d(2, n_filters, kernel_size=3, padding=(1, 1), stride=1)           # baord 6x6
-        self.conv2 = nn.Conv2d(n_filters, n_filters, kernel_size=3, padding=(1, 1), stride=1)   # baord 6x6
-        self.conv3 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1)                   # baord 4x4
-        self.conv4 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1)                   # baord 2x2
+        self.conv1 = nn.Conv2d(2, n_filters, kernel_size=3, padding=(1, 1), stride=1)           # baord 6x7
+        self.conv2 = nn.Conv2d(n_filters, n_filters, kernel_size=3, padding=(1, 1), stride=1)   # baord 6x7
+        self.conv3 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1)                   # baord 4x5
+        self.conv4 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1)                   # baord 2x3
 
         # use batch normalization to improve stability and learning rate
         self.conv_bn1 = nn.BatchNorm2d(n_filters)
@@ -36,7 +36,7 @@ class Network(nn.Module):
         self.conv_bn4 = nn.BatchNorm2d(n_filters)
 
         # fully connected layers
-        self.fc1 = nn.Linear(n_filters * 2 * 2, 256)
+        self.fc1 = nn.Linear(n_filters * 2 * 3, 256)
         self.fc_bn1 = nn.BatchNorm1d(256)
 
         self.fc2 = nn.Linear(256, 128)
@@ -75,7 +75,7 @@ class Network(nn.Module):
         x = F.relu(x)
 
         # fc layer 1
-        x = x.view(-1, self.n_channels * 2 * 2)  # transform to a vector
+        x = x.view(-1, self.n_channels * 2 * 3)  # transform to a vector
         x = self.fc1(x)
         x = self.fc_bn1(x)
         x = F.relu(x)
@@ -201,32 +201,19 @@ class Agent:
             state = torch.Tensor(sample[0]).to(Globals.training_device)
             policy = torch.Tensor(sample[1]).reshape(-1, CONST.NN_POLICY_SIZE).to(Globals.training_device)
             value = torch.Tensor(sample[2]).unsqueeze(1).to(Globals.training_device)
-            policy_matrix = policy.reshape((-1, 6, 6))
             tot_moves_played += state.shape[0]
 
-            for i in range(4):
-                # rotate it
-                new_state = torch.rot90(state, i, (2, 3))
-                new_policy = torch.rot90(policy_matrix, i, (1, 2))
-                new_policy_vec = new_policy.reshape((-1, 36))
-                self.experience_buffer.add_batch(new_state, new_policy_vec, value)
-
-                # flip it horizontally
-                new_state = torch.flip(new_state, [2])
-                new_policy = torch.flip(new_policy, [1])
-                new_policy_vec = new_policy.reshape((-1, 36))
-                self.experience_buffer.add_batch(new_state, new_policy_vec, value)
-
-
-            # state = torch.Tensor(sample[0]).to(Globals.training_device)
-            # policy = torch.Tensor(sample[1]).reshape(-1, CONST.NN_POLICY_SIZE).to(Globals.training_device)
-            # value = torch.Tensor(sample[2]).unsqueeze(1).to(Globals.training_device)
-
+            # add the original data
             self.experience_buffer.add_batch(state, policy, value)
+
+            # flip it vertically
+            new_state = torch.flip(state, [3])
+            new_policy = torch.flip(policy, [1])
+            self.experience_buffer.add_batch(new_state, new_policy, value)
 
         avg_game_length = tot_moves_played / game_count
         return avg_game_length
-            
+
 
 
     def nn_update(self, epoch_count):
@@ -290,7 +277,7 @@ class ExperienceBuffer:
     def __init__(self, max_size):
         self.max_size = max_size
 
-        self.state = torch.empty(max_size, 2, 6, 6).to(Globals.training_device)
+        self.state = torch.empty(max_size, 2, 6, 7).to(Globals.training_device)
         self.policy = torch.empty(max_size, CONST.NN_POLICY_SIZE).to(Globals.training_device)
         self.value = torch.empty(max_size, 1).to(Globals.training_device)
 
@@ -389,6 +376,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
     policy_list = []
     value_list = []
     # position_cache = {}   # give each simulation its own state dict
+    # position_count_dict = {}
 
     for i in range(game_count):
         board = connect4.BitBoard()
@@ -403,9 +391,17 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             temp = 0 if move_count >= temp_threshold else temp
             policy = mcts.policy_values(board, position_cache, net, mcts_sim_count, temp, alpha_dirich)
 
+            # state_id = board.state_id()
+            # if state_id in position_count_dict:
+            #     position_count_dict[state_id] += 1
+            # else:
+            #     position_count_dict[state_id] = 1
+
+
             # sample from the policy to determine the move to play
-            move = np.random.choice(connect4.policy_to_move_list, p=policy)
+            move = np.random.choice(len(policy), p=policy)
             board.play_move(move)
+            # print(policy.reshape((-1, 6, 7)))
             # board.print()
 
             # save the training example
@@ -417,7 +413,12 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
         # calculate the values from the perspective of the player who's move it is
         reward = board.reward()
         for player in player_list:
-            value = reward if player == CONST.WHITE_MOVE else -reward
+            value = reward if player == CONST.WHITE else -reward
             value_list.append(value)
+
+    # import matplotlib.pyplot as plt
+    # y = position_count_dict.values()
+    # plt.hist(y);
+    # plt.show()
 
     return state_list, policy_list, value_list

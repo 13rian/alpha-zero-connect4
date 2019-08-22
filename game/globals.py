@@ -1,14 +1,10 @@
 
 class CONST:
-	EMPTY = 0 				# no disk
-	WHITE = 1				# white disk (cross, x)
-	BLACK = 2 				# black disk (circle, o)
+	WHITE = 0				# white disk (red)
+	BLACK = 1 				# black disk (yellow)
 
-	NN_INPUT_SIZE = 36  	# size of the neural network input
-	NN_POLICY_SIZE = 36 	# the length of the policy vector, 36 actions are possible for the player to move
-
-	WHITE_MOVE = 0			# white's move constant
-	BLACK_MOVE = 1 			# black's move constant
+	NN_INPUT_SIZE = 42  	# size of the neural network input
+	NN_POLICY_SIZE = 7 	    # the length of the policy vector, 36 actions are possible for the player to move
 
 
 class Globals:
