@@ -402,7 +402,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             move = np.random.choice(len(policy), p=policy)
             board.play_move(move)
             # print(policy.reshape((-1, 6, 7)))
-            # board.print()
+            board.print()
 
             # save the training example
             state_list.append(state)
