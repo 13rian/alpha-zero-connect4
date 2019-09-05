@@ -42,6 +42,7 @@ def mainTrain():
     batch_size = 256                         # the batch size of the experience buffer for the neural network training 64
     exp_buffer_size = 3*2*42*episode_count    # the size of the experience replay buffer
 
+
     # define the devices for the training and the evaluation cpu or cuda
     Globals.evaluation_device = torch.device('cpu')
     Globals.training_device = torch.device('cuda')

@@ -405,7 +405,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             q_value = mcts.Q.get((s, move), 0)
             board.play_move(move)
             # print(policy.reshape((-1, 6, 7)))
-            # board.print()
+            board.print()
 
             # save the training example
             state_list.append(state)
