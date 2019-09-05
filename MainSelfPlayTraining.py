@@ -22,25 +22,25 @@ def mainTrain():
     # set the random seed
     random.seed(a=None, version=2)
 
-    # # initialize the pool
+    # initialize the pool
     Globals.n_pool_processes = mp.cpu_count()
     Globals.pool = mp.Pool(processes=Globals.n_pool_processes)
 
 
     # define the parameters
-    cycle_count = 50                        # the number of alpha zero cycles
+    cycle_count = 200                        # the number of alpha zero cycles
     episode_count = 2000                    # the number of games that are self-played in one cycle
     epoch_count = 2                         # the number of times all training examples are passed through the network 10
     mcts_sim_count = 100                    # the number of simulations for the monte-carlo tree search 800
     c_puct = 4                              # the higher this constant the more the mcts explores 4
     temp = 1                                # the temperature, controls the policy value distribution
-    temp_threshold = 36                     # up to this move the temp will be temp, otherwise 0 (deterministic play)
-    alpha_dirich = 0.3     # alpha parameter for the dirichlet noise (0.03 - 0.3 az paper, 10/ avg n_moves) 0.3
+    temp_threshold = 42                     # up to this move the temp will be temp, otherwise 0 (deterministic play)
+    alpha_dirich = 1     # alpha parameter for the dirichlet noise (0.03 - 0.3 az paper, 10/ avg n_moves) 0.3
     n_filters = 128                         # the number of filters in the conv layers 128
     learning_rate = 0.01                   # the learning rate of the neural network
     dropout = 0.2                           # dropout probability for the fully connected layers 0.3
     batch_size = 256                         # the batch size of the experience buffer for the neural network training 64
-    exp_buffer_size = 2*8*36*episode_count    # the size of the experience replay buffer
+    exp_buffer_size = 3*2*42*episode_count    # the size of the experience replay buffer
 
     # define the devices for the training and the evaluation cpu or cuda
     Globals.evaluation_device = torch.device('cpu')

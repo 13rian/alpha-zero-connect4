@@ -41,11 +41,9 @@ class AlphaZeroPlayer:
     def play_move(self, board):
         policy = self.mcts_player.policy_values(board, self.position_cache, self.net, self.mcts_sim_count, self.temp)
         if self.temp == 0:
-            policy_idx = np.where(policy == 1)[0]
-            move = connect4.policy_to_move_list[policy_idx]
-
+            move = np.where(policy == 1)[0]
         else:
-            move = np.random.choice(connect4.policy_to_move_list, p=policy)
+            move = np.random.choice(len(policy), p=policy)
 
         board.play_move(move)
 

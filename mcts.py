@@ -83,7 +83,7 @@ class MCTS:
 
         # check if the game is terminal    
         if board.terminal:
-            return board.reward()
+            return board.training_reward()
 
         # check if we are on a leaf node (state form which no simulation was played so far)
         s = board.state_id()

@@ -40,9 +40,9 @@ for i in range(len(path_list)):
     net = data_storage.load_net(net_path, Globals.evaluation_device)
 
 
-    print("play {} against the best network {}".format(net_path, best_network_path))
+    print("play {} against the random network {}".format(net_path, best_network_path))
     # random_net = alpha_zero_learning.Network(learning_rate)
-    net_score = alpha_zero_learning.net_vs_net(best_net, net, network_duel_game_count, mcts_sim_count, c_puct, 0)
+    net_score = alpha_zero_learning.net_vs_net(net, best_net, network_duel_game_count, mcts_sim_count, c_puct, 0)
     print("score: ", net_score)
     avg_score.append(net_score)
 
@@ -53,7 +53,7 @@ fig1 = plt.figure(1)
 plt.plot(generation, avg_score, color="#9ef3f3")
 axes = plt.gca()
 axes.set_ylim([0, 1])
-plt.title("Average Score Against Best Network")
+plt.title("Average Score Against Random Network")
 plt.xlabel("Generation")
 plt.ylabel("Average Score")
 fig1.show()

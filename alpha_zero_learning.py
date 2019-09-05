@@ -375,6 +375,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
     state_list = []
     policy_list = []
     value_list = []
+    q_list = []
     # position_cache = {}   # give each simulation its own state dict
     # position_count_dict = {}
 
@@ -390,6 +391,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             state, player = board.white_perspective()
             temp = 0 if move_count >= temp_threshold else temp
             policy = mcts.policy_values(board, position_cache, net, mcts_sim_count, temp, alpha_dirich)
+            s = board.state_id()
 
             # state_id = board.state_id()
             # if state_id in position_count_dict:
@@ -400,6 +402,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
 
             # sample from the policy to determine the move to play
             move = np.random.choice(len(policy), p=policy)
+            q_value = mcts.Q.get((s, move), 0)
             board.play_move(move)
             # print(policy.reshape((-1, 6, 7)))
             # board.print()
@@ -408,17 +411,22 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             state_list.append(state)
             player_list.append(player)
             policy_list.append(policy)
+            q_list.append(q_value)
             move_count += 1
 
         # calculate the values from the perspective of the player who's move it is
-        reward = board.reward()
-        for player in player_list:
-            value = reward if player == CONST.WHITE else -reward
+        # modification to alpha-zero: average value and q_value
+        reward = board.training_reward()
+        for idx, player in enumerate(player_list):
+            value = (reward + q_list[idx]) / 2
+            value = value if player == CONST.WHITE else -value
             value_list.append(value)
+            # value = reward if player == CONST.WHITE else -reward
+            # value_list.append(value)
 
     # import matplotlib.pyplot as plt
     # y = position_count_dict.values()
-    # plt.hist(y);
+    # plt.hist(y)
     # plt.show()
 
     return state_list, policy_list, value_list

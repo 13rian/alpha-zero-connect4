@@ -88,6 +88,15 @@ def atoi(text):
     return int(text) if text.isdigit() else text
 
 
+def popcount(num):
+    """
+    counts the number of bits that are set in the passed integer
+    :param num:     integer
+    :return:
+    """
+    return bin(num).count('1')
+
+
 def natural_keys(text):
     """
     sort function for natural sort, this will sort strings like this

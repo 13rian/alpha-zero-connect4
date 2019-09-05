@@ -3,6 +3,7 @@ import copy
 
 import numpy as np
 
+from utils import utils
 from game.globals import CONST
 
 # mask that defines the location of the upper bits of the board
@@ -56,12 +57,12 @@ class BitBoard:
         self.position = 0
 
         count = 0
-        disk_count = 0
-        for x in range(6):
+        self.move_count = 0
+        for x in range(7):
             for y in range(5, -1, -1):
                 if board[y, x]:
                     self.disk_mask += 1 << (count + x)
-                    disk_count += 1
+                    self.move_count += 1
                 if board[y, x] == CONST.WHITE + 1:
                     self.position += 1 << (count + x)
 
@@ -76,8 +77,27 @@ class BitBoard:
         self.__calc_legal_moves__()
 
         # check the game states
-        self.check_win()
-    
+        self.check_win(self.position)
+
+
+    def from_position(self, position, disk_mask):
+        """
+        creates a position from the integer representations
+        :param position:    position of the current player
+        :param disk_mask:   all disks that are set
+        :return:
+        """
+
+        self.position = position
+        self.disk_mask = disk_mask
+        self.move_count = utils.popcount(disk_mask)
+
+        # calculate all legal moves and disks to flip
+        self.__calc_legal_moves__()
+
+        # check the game states
+        self.check_win(self.position)
+
 
     def print(self):
         """
@@ -170,11 +190,11 @@ class BitBoard:
         """
         column = int(column)
         old_mask = self.disk_mask
-        self.position = self.position ^ self.disk_mask
+        self.position = self.position ^ self.disk_mask                              # get position of the opponent
         self.disk_mask = self.disk_mask | (self.disk_mask + (1 << (column * 7)))
 
         self.move_count += 1
-        self.check_win()
+        self.check_win(self.position ^ self.disk_mask)
         self.player = self.move_count % 2
 
         # check if the upper row was set
@@ -185,12 +205,13 @@ class BitBoard:
             self.terminal = True
         
 
-    def check_win(self):
+    def check_win(self, position):
         """
         checks if the current player has won the game
+        :param position:    the position that is checked
         :return:
         """
-        if self.four_in_a_row():
+        if self.four_in_a_row(position):
             self.terminal = True
             self.score = 1 if self.player == CONST.WHITE else -1
         
@@ -206,33 +227,34 @@ class BitBoard:
     def __calc_legal_moves__(self):
         self.legal_moves = []
         for idx, val in enumerate([5, 12, 19, 26, 33, 40, 47]):
-            if self.disk_mask & (1 << val):
+            if not self.disk_mask & (1 << val):
                 self.legal_moves.append(idx)
      
 
-    def four_in_a_row(self):
+    def four_in_a_row(self, position):
         """
         checks if the passed player has a row of four
+        :param position:    the position that is checked
         :return:
         """
 
         # vertical
-        temp = self.position & (self.position >> 1)
+        temp = position & (position >> 1)
         if temp & (temp >> 2):
             return True
 
         # horizontal
-        temp = self.position & (self.position >> 7)
+        temp = position & (position >> 7)
         if temp & (temp >> 14):
             return True
 
         # diagonal /
-        temp = self.position & (self.position >> 8)
+        temp = position & (position >> 8)
         if temp & (temp >> 16):
             return True
 
         # diagonal \
-        temp = self.position & (self.position >> 6)
+        temp = position & (position >> 6)
         if temp & (temp >> 12):
             return True
 
@@ -264,6 +286,18 @@ class BitBoard:
             return 0        
         else:
             return self.score
+
+
+    def reward(self):
+        """
+        returns the reward for training that prefers a quick win over a slow win
+        :return:
+        """
+
+        if not self.terminal:
+            return 0
+        else:
+            return self.score * (1.18 - (9*self.move_count) / 350)
 
 
     def white_score(self):
