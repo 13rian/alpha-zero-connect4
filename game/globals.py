@@ -3,8 +3,9 @@ class CONST:
 	WHITE = 0				# white disk (red)
 	BLACK = 1 				# black disk (yellow)
 
-	NN_INPUT_SIZE = 42  	# size of the neural network input
-	NN_POLICY_SIZE = 7 	    # the length of the policy vector, 36 actions are possible for the player to move
+	BOARD_WIDTH = 7 	    				 # the width of the board (number of columns)
+	BOARD_HEIGHT = 6						 # the height of the board
+	BOARD_SIZE = BOARD_WIDTH * BOARD_HEIGHT  # the size of the board
 
 
 class Globals:

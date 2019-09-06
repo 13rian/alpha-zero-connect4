@@ -119,7 +119,7 @@ board = connect4.BitBoard()
 board.from_board_matrix(mat)
 board.play_move(4)
 board.print()
-print(board.reward())
+print(board.training_reward())
 
 
 

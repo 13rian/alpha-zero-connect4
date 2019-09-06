@@ -45,12 +45,12 @@ class MCTS:
             self.tree_search(sim_board, position_cache, net, alpha_dirich)
 
         s = board.state_id()
-        counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in range(CONST.NN_POLICY_SIZE)]
+        counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in range(CONST.BOARD_WIDTH)]
 
         # in order to learn something set the probabilities of the best action to 1 and all other action to 0
         if temp == 0:
             action = np.argmax(counts)
-            probs = [0] * CONST.NN_POLICY_SIZE
+            probs = [0] * CONST.BOARD_WIDTH
             probs[action] = 1
             return np.array(probs)
 
@@ -106,7 +106,7 @@ class MCTS:
 
             # ensure that the summed probability of all valid moves is 1
             legal_moves = np.array(board.legal_moves)
-            legal_move_indices = np.zeros(CONST.NN_POLICY_SIZE)
+            legal_move_indices = np.zeros(CONST.BOARD_WIDTH)
             legal_move_indices[legal_moves] = 1
             self.P[s] = self.P[s] * legal_move_indices
             total_prob = np.sum(self.P[s])

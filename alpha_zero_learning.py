@@ -1,11 +1,8 @@
-from multiprocessing import Process, Manager
+from multiprocessing import Manager
 import numpy as np
 import logging
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 
 from game import connect4
 from game.globals import Globals, CONST
@@ -16,121 +13,9 @@ import data_storage
 logger = logging.getLogger('Connect4')
 
 
-class Network(nn.Module):
-    def __init__(self, learning_rate, n_filters, dropout):
-        super(Network, self).__init__()
-
-        self.n_channels = n_filters
-        self.dropout = dropout
-
-        # convolutional layers
-        self.conv1 = nn.Conv2d(2, n_filters, kernel_size=3, padding=(1, 1), stride=1)           # baord 6x7
-        self.conv2 = nn.Conv2d(n_filters, n_filters, kernel_size=3, padding=(1, 1), stride=1)   # baord 6x7
-        self.conv3 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1)                   # baord 4x5
-        self.conv4 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1)                   # baord 2x3
-
-        # use batch normalization to improve stability and learning rate
-        self.conv_bn1 = nn.BatchNorm2d(n_filters)
-        self.conv_bn2 = nn.BatchNorm2d(n_filters)
-        self.conv_bn3 = nn.BatchNorm2d(n_filters)
-        self.conv_bn4 = nn.BatchNorm2d(n_filters)
-
-        # fully connected layers
-        self.fc1 = nn.Linear(n_filters * 2 * 3, 256)
-        self.fc_bn1 = nn.BatchNorm1d(256)
-
-        self.fc2 = nn.Linear(256, 128)
-        self.fc_bn2 = nn.BatchNorm1d(128)
-
-        # policy head
-        self.fc3p = nn.Linear(128, CONST.NN_POLICY_SIZE)  # approximation for the action value function Q(s, a)
-
-        # value head
-        self.fc3v = nn.Linear(128, 1)  # approximation for the value function V(s)
-
-        # define the optimizer
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
-
-
-
-    def forward(self, x):
-        # conv1
-        x = self.conv1(x)
-        x = self.conv_bn1(x)
-        x = F.relu(x)
-
-        # conv2
-        x = self.conv2(x)
-        x = self.conv_bn2(x)
-        x = F.relu(x)
-
-        # conv3
-        x = self.conv3(x)
-        x = self.conv_bn3(x)
-        x = F.relu(x)
-
-        # conv4
-        x = self.conv4(x)
-        x = self.conv_bn4(x)
-        x = F.relu(x)
-
-        # fc layer 1
-        x = x.view(-1, self.n_channels * 2 * 3)  # transform to a vector
-        x = self.fc1(x)
-        x = self.fc_bn1(x)
-        x = F.relu(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-
-        # fc layer 2
-        x = self.fc2(x)
-        x = self.fc_bn2(x)
-        x = F.relu(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-
-        # policy
-        p = self.fc3p(x)
-        p = F.softmax(p, dim=1)  # values between 0 and 1
-
-        # value
-        v = self.fc3v(x)
-        v = torch.tanh(v)  # values between -1 and 1
-
-        return p, v
-
-
-    def train_step(self, batch, target_p, target_v):
-        """
-        executes one training step of the neural network
-        :param batch:           tensor with data [batchSize, nn_input_size]
-        :param target_p:        policy target
-        :param target_v:        value target
-        :return:                policy loss, value loss
-        """
-
-        # send the tensors to the used device
-        data = batch.to(Globals.training_device)
-
-        self.optimizer.zero_grad()               # reset the gradients to zero in every epoch
-        prediction_p, prediction_v = self(data)  # pass the data through the network to get the prediction
-
-        # create the label
-        target_p = target_p.to(Globals.training_device)
-        target_v = target_v.to(Globals.training_device)
-        criterion_p = nn.MSELoss()
-        criterion_v = nn.MSELoss()
-
-        # define the loss
-        loss_p = criterion_p(prediction_p, target_p)
-        loss_v = criterion_v(prediction_v, target_v)
-        loss = loss_p + loss_v
-        loss.backward()  # back propagation
-        self.optimizer.step()  # make one optimization step
-        return loss_p, loss_v
-    
-
 
 class Agent:
-    def __init__(self, learning_rate, n_filters, dropout, mcts_sim_count, c_puct, temp, batch_size, exp_buffer_size):
+    def __init__(self, network, mcts_sim_count, c_puct, temp, batch_size, exp_buffer_size):
         """
         :param learning_rate:       learning rate for the neural network
         :param n_filters:           the number of filters in the convolutional layers
@@ -141,13 +26,11 @@ class Agent:
         :param exp_buffer_size:     the size of the experience replay buffer
         """
 
-        self.learningRate = learning_rate                            # learning rate for the stochastic gradient decent
-        self.n_filters = n_filters                                   # the number of filters in the convolutional layer
+        self.network = network                                       # the network
         self.mcts_sim_count = mcts_sim_count                         # the number of simulations for the monte-carlo tree search
         self.c_puct = c_puct                                         # the higher this constant the more the mcts explores
         self.temp = temp                                             # the temperature, controls the policy value distribution
         self.batch_size = batch_size                                 # the size of the experience replay buffer
-        self.network = Network(learning_rate, n_filters, dropout)    # the network
 
         self.board = connect4.BitBoard()                             # connect4 board
         self.exp_buffer_size = exp_buffer_size                       # the size of the experience buffer
@@ -199,7 +82,7 @@ class Agent:
         tot_moves_played = 0
         for sample in self_play_results:
             state = torch.Tensor(sample[0]).to(Globals.training_device)
-            policy = torch.Tensor(sample[1]).reshape(-1, CONST.NN_POLICY_SIZE).to(Globals.training_device)
+            policy = torch.Tensor(sample[1]).reshape(-1, CONST.BOARD_WIDTH).to(Globals.training_device)
             value = torch.Tensor(sample[2]).unsqueeze(1).to(Globals.training_device)
             tot_moves_played += state.shape[0]
 
@@ -278,7 +161,7 @@ class ExperienceBuffer:
         self.max_size = max_size
 
         self.state = torch.empty(max_size, 2, 6, 7).to(Globals.training_device)
-        self.policy = torch.empty(max_size, CONST.NN_POLICY_SIZE).to(Globals.training_device)
+        self.policy = torch.empty(max_size, CONST.BOARD_WIDTH).to(Globals.training_device)
         self.value = torch.empty(max_size, 1).to(Globals.training_device)
 
         self.size = 0  # size of the buffer
@@ -405,7 +288,7 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             q_value = mcts.Q.get((s, move), 0)
             board.play_move(move)
             # print(policy.reshape((-1, 6, 7)))
-            board.print()
+            # board.print()
 
             # save the training example
             state_list.append(state)

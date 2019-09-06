@@ -200,7 +200,7 @@ for i in range(len(path_list)):
 fig1 = plt.figure(1)
 plt.plot(generation, net_prediciton_error)
 axes = plt.gca()
-axes.set_ylim([0, 100])
+axes.set_ylim([0, 75])
 plt.title("Network Optimal Move Prediction Error")
 plt.xlabel("Generation")
 plt.ylabel("Prediction Error")

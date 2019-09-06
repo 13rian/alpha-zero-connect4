@@ -288,7 +288,7 @@ class BitBoard:
             return self.score
 
 
-    def reward(self):
+    def training_reward(self):
         """
         returns the reward for training that prefers a quick win over a slow win
         :return:
