@@ -8,6 +8,7 @@ from game import connect4
 from game.globals import Globals, CONST
 from game import tournament
 from mcts import MCTS
+from utils import utils
 import data_storage
 
 logger = logging.getLogger('Connect4')
@@ -37,7 +38,7 @@ class Agent:
         self.experience_buffer = ExperienceBuffer(exp_buffer_size)   # buffer that saves all experiences
 
         # activate the evaluation mode of the networks
-        data_storage.net_to_device(self.network, Globals.evaluation_device)
+        self.network = data_storage.net_to_device(self.network, Globals.evaluation_device)
         self.network.eval()
 
 
@@ -47,9 +48,10 @@ class Agent:
 
     # from utils import utils
     # @utils.profile
-    def play_self_play_games(self, game_count, temp_threshold, alpha_dirich=0):
+    def play_self_play_games(self, network_path, game_count, temp_threshold, alpha_dirich=0):
         """
         plays some games against itself and adds the experience into the experience buffer
+        :param network_path     the path of the current network
         :param game_count:      the number of games to play
         :param temp_threshold:  up to this move the temp will be temp, after the threshold it will be set to 0
                                 plays a game against itself with some exploratory moves in it
@@ -59,8 +61,9 @@ class Agent:
 
         if Globals.pool is None:
             position_cache = {}
-            self_play_results = [__self_play_worker__(self.network, position_cache, self.mcts_sim_count,
-                                                      self.c_puct, temp_threshold, self.temp, alpha_dirich, game_count)]
+            self_play_results = [__self_play_worker__(network_path, Globals.evaluation_device, position_cache,
+                                                      self.mcts_sim_count, self.c_puct, temp_threshold, self.temp,
+                                                      alpha_dirich, game_count)]
         else:
             # create the shared dict for the position cache
             manager = Manager()
@@ -68,7 +71,8 @@ class Agent:
 
             games_per_process = int(game_count / Globals.n_pool_processes)
             self_play_results = Globals.pool.starmap(__self_play_worker__,
-                                                      zip([self.network] * Globals.n_pool_processes,
+                                                      zip([network_path] * Globals.n_pool_processes,
+                                                          [torch.device('cpu')] * Globals.n_cpu_workers + [torch.device('cuda')] * Globals.n_gpu_workers,
                                                           [position_cache] * Globals.n_pool_processes,
                                                           [self.mcts_sim_count] * Globals.n_pool_processes,
                                                           [self.c_puct] * Globals.n_pool_processes,
@@ -150,7 +154,7 @@ class Agent:
         :return:                the mean score against the random player 0: lose, 0.5 draw, 1: win
         """
 
-        az_player = tournament.AlphaZeroPlayer(self.network, self.c_puct, self.mcts_sim_count, 0)
+        az_player = tournament.AlphaZeroPlayer(self.network, Globals.evaluation_device, self.c_puct, self.mcts_sim_count, 0)
         random_player = tournament.RandomPlayer()
         score = tournament.play_one_color(game_count, az_player, color, random_player)
         return score
@@ -235,16 +239,17 @@ def net_vs_net(net1, net2, game_count, mcts_sim_count, c_puct, temp):
     :return:                score of network1
     """
 
-    az_player1 = tournament.AlphaZeroPlayer(net1, c_puct, mcts_sim_count, temp)
-    az_player2 = tournament.AlphaZeroPlayer(net2, c_puct, mcts_sim_count, temp)
+    az_player1 = tournament.AlphaZeroPlayer(net1, Globals.evaluation_device, c_puct, mcts_sim_count, temp)
+    az_player2 = tournament.AlphaZeroPlayer(net2, c_puct, Globals.evaluation_device, mcts_sim_count, temp)
     score1 = tournament.play_match(game_count, az_player1, az_player2)
     return score1
 
 
-def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_threshold, temp, alpha_dirich, game_count):
+def __self_play_worker__(network_path, device, position_cache, mcts_sim_count, c_puct, temp_threshold, temp, alpha_dirich, game_count):
     """
     plays a number of self play games
-    :param net:                 the alpha zero network
+    :param network_path:        path of the network
+    :param device               the torch device for the evaluation of the network
     :param position_cache:      holds positions already evaluated by the network
     :param mcts_sim_count:      the monte carlo simulation count
     :param c_puct:              constant that controls the exploration
@@ -254,6 +259,9 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
     :param game_count:          the number of self-play games to play
     :return:                    state_list, policy_list, value_list
     """
+
+    # load the network
+    net = data_storage.load_net(network_path, device)
 
     state_list = []
     policy_list = []
@@ -273,22 +281,13 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
         while not board.terminal:
             state, player = board.white_perspective()
             temp = 0 if move_count >= temp_threshold else temp
-            policy = mcts.policy_values(board, position_cache, net, mcts_sim_count, temp, alpha_dirich)
+            policy = mcts.policy_values(board, position_cache, net, mcts_sim_count, temp, device, alpha_dirich)
             s = board.state_id()
-
-            # state_id = board.state_id()
-            # if state_id in position_count_dict:
-            #     position_count_dict[state_id] += 1
-            # else:
-            #     position_count_dict[state_id] = 1
-
 
             # sample from the policy to determine the move to play
             move = np.random.choice(len(policy), p=policy)
             q_value = mcts.Q.get((s, move), 0)
             board.play_move(move)
-            # print(policy.reshape((-1, 6, 7)))
-            # board.print()
 
             # save the training example
             state_list.append(state)
@@ -304,12 +303,9 @@ def __self_play_worker__(net, position_cache, mcts_sim_count, c_puct, temp_thres
             value = (reward + q_list[idx]) / 2
             value = value if player == CONST.WHITE else -value
             value_list.append(value)
-            # value = reward if player == CONST.WHITE else -reward
-            # value_list.append(value)
 
-    # import matplotlib.pyplot as plt
-    # y = position_count_dict.values()
-    # plt.hist(y)
-    # plt.show()
+    # delete the network
+    del net
+    torch.cuda.empty_cache()
 
     return state_list, policy_list, value_list

@@ -15,3 +15,7 @@ class Globals:
 	# pool for the multi processing
 	pool = None
 	n_pool_processes = None 		# the number of parallel processes, usually the number of cores or one less
+
+	# number of cpu and gpu workers for the self play games
+	n_cpu_workers = None
+	n_gpu_workers = None

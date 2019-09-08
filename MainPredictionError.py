@@ -159,7 +159,7 @@ def mctsPredictionError(net, test_set, mcts_sim_count, temp):
         board.from_position(test_set["position"][i], test_set["disk_mask"][i])
 
         # find the predicted move
-        policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, temp)
+        policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, temp, Globals.evaluation_device)
         move = np.where(policy == 1)[0][0]
 
 
@@ -200,7 +200,7 @@ for i in range(len(path_list)):
 fig1 = plt.figure(1)
 plt.plot(generation, net_prediciton_error)
 axes = plt.gca()
-axes.set_ylim([0, 75])
+axes.set_ylim([0, 80])
 plt.title("Network Optimal Move Prediction Error")
 plt.xlabel("Generation")
 plt.ylabel("Prediction Error")

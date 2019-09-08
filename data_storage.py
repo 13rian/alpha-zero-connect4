@@ -22,6 +22,7 @@ class TrainingData:
         self.avg_moves_played = []      # the average number of moves played in the self-play games
         self.policy_loss = []           # policy training loss
         self.value_loss = []            # value training loss
+        self.network_path = None        # path of the current best network
         self.experience_buffer = None   # buffer with the self-play game data
 
 
@@ -33,11 +34,13 @@ class TrainingData:
         """
 
         # save the current network
-        torch.save(network, "{}/network_gen_{}.pt".format(network_dir, self.cycle))
+        self.network_path = "{}/network_gen_{}.pt".format(network_dir, self.cycle)
+        torch.save(network, self.network_path)
 
         # dump the storage object to file
         with open(storage_path, 'wb') as output:
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
+
 
 
     def load_current_net(self):
@@ -94,9 +97,9 @@ def net_to_device(net, device):
     # put the model on the gpu
     if device.type == "cuda":
         torch.save(net, net_path)
-        cpu_net = torch.load(net_path, map_location='cuda')
+        cuda_net = torch.load(net_path, map_location='cuda')
         shutil.rmtree(temp_dir)
-        return cpu_net
+        return cuda_net
 
     # put the model on the cpu
     if device.type == "cpu":

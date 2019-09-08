@@ -24,20 +24,22 @@ def mainTrain():
     random.seed(a=None, version=2)
 
     # initialize the pool
-    Globals.n_pool_processes = mp.cpu_count()
+    Globals.n_cpu_workers = 6
+    Globals.n_gpu_workers = 3
+    Globals.n_pool_processes = Globals.n_cpu_workers + Globals.n_gpu_workers
     Globals.pool = mp.Pool(processes=Globals.n_pool_processes)
 
 
     # define the parameters
-    cycle_count = 20                        # the number of alpha zero cycles
-    episode_count = 8                    # the number of games that are self-played in one cycle
+    cycle_count = 100                       # the number of alpha zero cycles
+    episode_count = 2000                    # the number of games that are self-played in one cycle 2000
     epoch_count = 2                         # the number of times all training examples are passed through the network 10
     mcts_sim_count = 200                    # the number of simulations for the monte-carlo tree search 800
     c_puct = 4                              # the higher this constant the more the mcts explores 4
     temp = 1                                # the temperature, controls the policy value distribution
     temp_threshold = 42                     # up to this move the temp will be temp, otherwise 0 (deterministic play)
     alpha_dirich = 1     # alpha parameter for the dirichlet noise (0.03 - 0.3 az paper, 10/ avg n_moves) 0.3
-    n_filters = 64                         # the number of filters in the conv layers 128
+    n_filters = 128                         # the number of filters in the conv layers 128
     learning_rate = 0.01                   # the learning rate of the neural network
     dropout = 0.2                           # dropout probability for the fully connected layers 0.3
     n_blocks = 5                            # number of residual blocks
@@ -49,8 +51,11 @@ def mainTrain():
     Globals.evaluation_device = torch.device('cpu')
     Globals.training_device = torch.device('cuda')
 
+
     # create the storage object
     training_data = data_storage.load_data()
+
+
 
     # create the agent
     # network = networks.ConvNet(learning_rate, n_filters, dropout)
@@ -69,17 +74,9 @@ def mainTrain():
 
     start_training = time.time()
     for i in range(training_data.cycle, cycle_count, 1):
-        # ###### play against random
-        # white_score = agent.play_against_random(CONST.WHITE, evaluation_game_count)
-        # logger.info("white score vs random: {}".format(white_score))
-        #
-        # black_score = agent.play_against_random(CONST.BLACK, evaluation_game_count)
-        # logger.info("black score vs random: {}".format(black_score))
-
-
         ###### self play and update: create some game data through self play
         logger.info("start playing games in cycle {}".format(i))
-        avg_moves_played = agent.play_self_play_games(episode_count, temp_threshold, alpha_dirich)
+        avg_moves_played = agent.play_self_play_games(training_data.network_path, episode_count, temp_threshold, alpha_dirich)
         training_data.avg_moves_played.append(avg_moves_played)
         print("average moves played: ", avg_moves_played)
 
