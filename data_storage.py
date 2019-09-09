@@ -5,7 +5,7 @@ import shutil
 
 import torch
 
-from game.globals import Globals
+from globals import Config
 
 logger = logging.getLogger('TrainingData')
 storage_path = "training_data.pkl"
@@ -50,7 +50,7 @@ class TrainingData:
         """
 
         net_path = "{}/network_gen_{}.pt".format(network_dir, self.cycle)
-        net = load_net(net_path, Globals.evaluation_device)
+        net = load_net(net_path, Config.evaluation_device)
         net.eval()
         logger.debug("network loaded from path {}".format(net_path))
         return net
@@ -122,8 +122,8 @@ def load_net(net_path, device):
 
     # put the model on the gpu
     if device.type == "cuda":
-        cpu_net = torch.load(net_path, map_location='cuda')
-        return cpu_net
+        gpu_net = torch.load(net_path, map_location='cuda')
+        return gpu_net
 
     # put the model on the cpu
     if device.type == "cpu":

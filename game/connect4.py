@@ -4,7 +4,7 @@ import copy
 import numpy as np
 
 from utils import utils
-from game.globals import CONST
+from globals import CONST
 
 # mask that defines the location of the upper bits of the board
 upper_row_mask = (1 << 5) + (1 << 12) + (1 << 19) + (1 << 26) + (1 << 33) + (1 << 40) + (1 << 47)

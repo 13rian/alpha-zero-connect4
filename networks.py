@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from game.globals import Globals, CONST
+from globals import CONST, Config
 
 
 
@@ -104,14 +104,14 @@ class ConvNet(nn.Module):
         """
 
         # send the tensors to the used device
-        data = batch.to(Globals.training_device)
+        data = batch.to(Config.training_device)
 
         self.optimizer.zero_grad()               # reset the gradients to zero in every epoch
         prediction_p, prediction_v = self(data)  # pass the data through the network to get the prediction
 
         # create the label
-        target_p = target_p.to(Globals.training_device)
-        target_v = target_v.to(Globals.training_device)
+        target_p = target_p.to(Config.training_device)
+        target_v = target_v.to(Config.training_device)
         criterion_p = nn.MSELoss()
         criterion_v = nn.MSELoss()
 
@@ -254,14 +254,14 @@ class ResNet(nn.Module):
         """
 
         # send the tensors to the used device
-        data = batch.to(Globals.training_device)
+        data = batch.to(Config.training_device)
 
         self.optimizer.zero_grad()  # reset the gradients to zero in every epoch
         prediction_p, prediction_v = self(data)  # pass the data through the network to get the prediction
 
         # create the label
-        target_p = target_p.to(Globals.training_device)
-        target_v = target_v.to(Globals.training_device)
+        target_p = target_p.to(Config.training_device)
+        target_v = target_v.to(Config.training_device)
         criterion_p = nn.MSELoss()
         criterion_v = nn.MSELoss()
 

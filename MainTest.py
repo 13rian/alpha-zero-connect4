@@ -1,16 +1,9 @@
-import time
-import pickle
 import torch
 
 import numpy as np
 from game import connect4
 import mcts
-from alpha_zero_learning import Network
 import data_storage
-from game.globals import Globals
-
-
-
 
 
 # # play 4 moves and print the board
@@ -146,8 +139,8 @@ c_puct = 4
 temp = 1
 mcts_sim_count = 800
 mcts_player = mcts.MCTS(c_puct)
-policy_best = mcts_player.policy_values(board, {}, best_net, mcts_sim_count, temp, Globals.evaluation_device)
-policy_random = mcts_player.policy_values(board, {}, random_net, mcts_sim_count, temp, Globals.evaluation_device)
+policy_best = mcts_player.policy_values(board, {}, best_net, mcts_sim_count, temp)
+policy_random = mcts_player.policy_values(board, {}, random_net, mcts_sim_count, temp)
 
 print("best: ", policy_best)
 print("random: ", policy_random)

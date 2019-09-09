@@ -3,7 +3,7 @@ import math
 import numpy as np
 import torch
 
-from game.globals import CONST
+from globals import CONST, Config
 
 
 class MCTS:
@@ -21,7 +21,7 @@ class MCTS:
         
         
     
-    def policy_values(self, board, position_cache, net, mc_sim_count, temp, device, alpha_dirich=0):
+    def policy_values(self, board, position_cache, net, mc_sim_count, temp, alpha_dirich=0):
         """
         executes mc_sim_count number of monte-carlo simulations to obtain the probability
         vector of the current game position
@@ -32,7 +32,6 @@ class MCTS:
         :param temp:             the temperature, determines the degree of exploration
                                  temp = 0 means that we only pick the best move
                                  temp = 1 means that we pick the move proportional to the count the state was visited
-        :param device            the torch device for the network evaluation
         :param alpha_dirich:     alpha parameter for the dirichlet noise that is added to the root node probabilities
         :return:                 policy where the probability of an action is proportional to 
                                  N_sa**(1/temp)
@@ -41,7 +40,7 @@ class MCTS:
         # perform the tree search
         for _ in range(mc_sim_count):
             sim_board = board.clone()
-            self.tree_search(sim_board, position_cache, net, device, alpha_dirich)
+            self.tree_search(sim_board, position_cache, net, alpha_dirich)
 
         s = board.state_id()
         counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in range(CONST.BOARD_WIDTH)]
@@ -60,7 +59,7 @@ class MCTS:
 
 
 
-    def tree_search(self, board, position_cache, net, device, alpha_dirich=0):
+    def tree_search(self, board, position_cache, net, alpha_dirich=0):
         """
         Performs one iteration of the monte-carlo tree search.
         The method is recursively called until a leaf node is found. This is a game
@@ -76,7 +75,6 @@ class MCTS:
         :param board:           represents the game
         :param position_cache:  holds positions already evaluated by the network
         :param net:             neural network that approximates the policy and the value
-        :param device:          the torch device for the network evaluation
         :param alpha_dirich:    alpha parameter for the dirichlet noise that is added to the root node probabilities
         :return: 
         """
@@ -90,7 +88,7 @@ class MCTS:
         player = board.player
         if s not in self.P:
             batch, _ = board.white_perspective()
-            batch = torch.Tensor(batch).unsqueeze(0).to(device)
+            batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
 
             # check if the position is in the position cache
             if s in position_cache:
@@ -148,7 +146,7 @@ class MCTS:
 
         a = action
         board.play_move(a)
-        v = self.tree_search(board, position_cache, net, device)
+        v = self.tree_search(board, position_cache, net)
 
         # update the Q and N values
         v_true = v

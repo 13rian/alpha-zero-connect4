@@ -1,4 +1,4 @@
-from game.globals import CONST
+from globals import CONST
 from game import connect4
 import numpy as np
 import copy
@@ -24,16 +24,14 @@ class AlphaZeroPlayer:
     player that makes a move according to the alpha zero algorithm
     """
 
-    def __init__(self, net, device, c_puct, mcts_sim_count, temp):
+    def __init__(self, net, c_puct, mcts_sim_count, temp):
         """
         :param net:                 alpha zero network
-        :param device               the torch device for the evaluation
         :param c_puct:              constant that controls the exploration
         :param mcts_sim_count:      the number of monte-carlo simulation counts
         :param temp:                the temperature
         """
         self.net = net
-        self.device = device
         self.mcts_player = mcts.MCTS(c_puct)
         self.mcts_sim_count = mcts_sim_count
         self.temp = temp
@@ -41,7 +39,7 @@ class AlphaZeroPlayer:
 
 
     def play_move(self, board):
-        policy = self.mcts_player.policy_values(board, self.position_cache, self.net, self.mcts_sim_count, self.temp, self.device)
+        policy = self.mcts_player.policy_values(board, self.position_cache, self.net, self.mcts_sim_count, self.temp)
         if self.temp == 0:
             move = np.where(policy == 1)[0]
         else:
