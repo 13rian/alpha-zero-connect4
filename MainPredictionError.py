@@ -32,13 +32,13 @@ def net_prediction_error(net, test_set):
     :return:            error percentage
     """
 
-    tot_positions = test_set.shape[0]   # the total number of positions in the test set
+    tot_positions = 140   # test_set.shape[0]   # the total number of positions in the test set
     correct_predictions = 0             # the correctly predicted positions in the test set
 
-    for i in range(tot_positions):
+    for j in range(tot_positions):
         # load the board
         board = connect4.BitBoard()
-        board.from_position(test_set["position"][i], test_set["disk_mask"][i])
+        board.from_position(test_set["position"][j], test_set["disk_mask"][j])
 
         # get the white perspective
         board.white_perspective()
@@ -51,12 +51,12 @@ def net_prediction_error(net, test_set):
         move = move.item()
 
         # check if the move is part of the optimal moves
-        if str(move) in test_set["moves"][i]:
+        if str(move) in test_set["moves"][j]:
             correct_predictions += 1
 
     # calculate the prediction error
-    error = (tot_positions - correct_predictions) / tot_positions * 100
-    return error
+    pred_error = (tot_positions - correct_predictions) / tot_positions * 100
+    return pred_error
 
 
 
@@ -69,27 +69,27 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, temp):
     :return:            error percentage
     """
 
-    tot_positions = test_set.shape[0]   # the total number of positions in the test set
+    tot_positions = 140        # test_set.shape[0]   # the total number of positions in the test set
     correct_predictions = 0             # the correctly predicted positions in the test set
 
     # mcts
-    for i in range(test_set.shape[0]):
+    for j in range(tot_positions):
         mcts_net = mcts.MCTS(c_puct)
 
         # load the board
         board = connect4.BitBoard()
-        board.from_position(test_set["position"][i], test_set["disk_mask"][i])
+        board.from_position(test_set["position"][j], test_set["disk_mask"][j])
 
         # find the predicted move
         policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, temp)
         move = np.where(policy == 1)[0][0]
 
-        if str(move) in test_set["moves"][i]:
+        if str(move) in test_set["moves"][j]:
             correct_predictions += 1
 
     # calculate the prediction error
-    error = (tot_positions - correct_predictions) / tot_positions * 100
-    return error
+    pred_error = (tot_positions - correct_predictions) / tot_positions * 100
+    return pred_error
 
 
 
@@ -98,29 +98,95 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, temp):
 test_set = pd.read_csv(test_set_path, sep=",")
 
 
+
+
+
+# # compare the mcts and the network policy of the best network
+# path_list = os.listdir(network_dir)
+# path_list.sort(key=utils.natural_keys)
+# network_path = network_dir + "/" + path_list[-1]
+# net = data_storage.load_net(network_path, Config.evaluation_device)
+#
+# i = 2003
+#
+#
+# # MCTS
+# mcts_net = mcts.MCTS(c_puct)
+#
+# # load the board
+# board = connect4.BitBoard()
+# board.from_position(test_set["position"][i], test_set["disk_mask"][i])
+# board.print()
+#
+# # find the predicted move
+# policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, temp)
+# print("mcts-pol: ", policy)
+# move = np.where(policy == 1)[0][0]
+#
+# if str(move) in test_set["moves"][i]:
+#     print("mcts ok")
+#
+#
+# # NET prediction
+# # load the board
+# board = connect4.BitBoard()
+# board.from_position(test_set["position"][i], test_set["disk_mask"][i])
+#
+# # get the white perspective
+# board.white_perspective()
+# batch, _ = board.white_perspective()
+# batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
+#
+# # find the predicted move
+# policy, _ = net(batch)
+# print("net-pol: ", policy)
+# _, move = policy.max(1)
+# move = move.item()
+#
+# # check if the move is part of the optimal moves
+# if str(move) in test_set["moves"][i]:
+#     print("network prediction ok")
+#
+# print("moves: ", test_set["moves"][i])
+
+
+
+
+
+
+
+
+
+
+
 # calculate the prediciton error of the networks
 generation = []
 net_prediciton_error = []
 mcts_prediciton_error = []
 path_list = os.listdir(network_dir)
 path_list.sort(key=utils.natural_keys)
-path_list = path_list[0:2]
 
 
-# get the prediction error of all networks
-for i in range(len(path_list)):
-    generation.append(i)
-    net_path = network_dir + path_list[i]
-    net = data_storage.load_net(net_path, Config.evaluation_device)
 
-    error = net_prediction_error(net, test_set)
-    net_prediciton_error.append(error)
-    print("error: ", error, "network: ", net_path)
 
+
+
+
+# # get the prediction error of all networks
+# for i in range(len(path_list)):
+#     generation.append(i)
+#     net_path = network_dir + path_list[i]
+#     net = data_storage.load_net(net_path, Config.evaluation_device)
+#
+#     error = net_prediction_error(net, test_set)
+#     net_prediciton_error.append(error)
+#     print("error: ", error, "network: ", net_path)
+#
 
 
 
 # get the mcts prediction error of all networks
+path_list = [path_list[-1]]
 for i in range(len(path_list)):
     net_path = network_dir + path_list[i]
     net = data_storage.load_net(net_path, Config.evaluation_device)
@@ -143,14 +209,14 @@ fig1.show()
 
 
 
-# plot the network prediction error
-fig2 = plt.figure(2)
-plt.plot(generation, net_prediciton_error)
-axes = plt.gca()
-axes.set_ylim([0, 80])
-plt.title("MCTS Optimal Move Prediction Error")
-plt.xlabel("Generation")
-plt.ylabel("Prediction Error")
-fig1.show()
+# # plot the network prediction error
+# fig2 = plt.figure(2)
+# plt.plot(generation, net_prediciton_error)
+# axes = plt.gca()
+# axes.set_ylim([0, 80])
+# plt.title("MCTS Optimal Move Prediction Error")
+# plt.xlabel("Generation")
+# plt.ylabel("Prediction Error")
+# fig2.show()
 
 plt.show()

@@ -22,8 +22,7 @@ def mainTrain():
     random.seed(a=None, version=2)
 
     # initialize the pool
-    Globals.n_pool_processes = 4  # mp.cpu_count()
-    Globals.pool = mp.Pool(processes=Globals.n_pool_processes)  # the number of parallel processes, usually the number of cores or one less
+    Globals.pool = mp.Pool(processes=Globals.n_pool_processes)
 
     # create the storage object
     training_data = data_storage.load_data()
@@ -31,7 +30,7 @@ def mainTrain():
     # create the agent
     # network = networks.ConvNet(learning_rate, n_filters, dropout)
     network = networks.ResNet(Config.learning_rate, Config.n_blocks, Config.n_filters)
-    agent = alpha_zero_learning.Agent(network, Config.mcts_sim_count, Config.c_puct, Config.temp, Config.batch_size, Config.exp_buffer_size)
+    agent = alpha_zero_learning.Agent(network)
 
     if training_data.cycle == 0:
         logger.debug("create a new agent")
@@ -47,14 +46,14 @@ def mainTrain():
     for i in range(training_data.cycle, Config.cycle_count, 1):
         ###### self play and update: create some game data through self play
         logger.info("start playing games in cycle {}".format(i))
-        avg_moves_played = agent.play_self_play_games(training_data.network_path, Config.episode_count, Config.temp_threshold, Config.alpha_dirich)
+        avg_moves_played = agent.play_self_play_games(training_data.network_path)
         training_data.avg_moves_played.append(avg_moves_played)
         print("average moves played: ", avg_moves_played)
 
 
         ###### training, train the training network and use the target network for predictions
         logger.info("start updates in cycle {}".format(i))
-        loss_p, loss_v = agent.nn_update(Config.epoch_count)
+        loss_p, loss_v = agent.nn_update()
         training_data.policy_loss.append(loss_p)
         training_data.value_loss.append(loss_v)
         print("policy loss: ", loss_p)

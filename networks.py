@@ -178,21 +178,21 @@ class OutBlock(nn.Module):
 
     def __init__(self, n_filters):
         super(OutBlock, self).__init__()
-        self.conv1_v = nn.Conv2d(n_filters, 3, kernel_size=1)  # value head
-        self.bn1_v = nn.BatchNorm2d(3)
-        self.fc1_v = nn.Linear(3 * 6 * 7, 32)
-        self.fc2_v = nn.Linear(32, 1)
+        self.conv1_v = nn.Conv2d(n_filters, 32, kernel_size=1)  # value head
+        self.bn1_v = nn.BatchNorm2d(32)
+        self.fc1_v = nn.Linear(32 * CONST.BOARD_SIZE, 256)
+        self.fc2_v = nn.Linear(256, 1)
 
         self.conv1_p = nn.Conv2d(n_filters, 32, kernel_size=1)  # policy head
         self.bn1_p = nn.BatchNorm2d(32)
         self.logsoftmax = nn.LogSoftmax(dim=1)
-        self.fc1_p = nn.Linear(6 * 7 * 32, 7)
+        self.fc1_p = nn.Linear(32 * CONST.BOARD_SIZE, 7)
 
 
     def forward(self, x):
         # value head
         v = F.relu(self.bn1_v(self.conv1_v(x)))
-        v = v.view(-1, 3 * CONST.BOARD_SIZE)  # channels*board size
+        v = v.view(-1, 32 * CONST.BOARD_SIZE)  # channels*board size
         v = F.relu(self.fc1_v(v))
         v = torch.tanh(self.fc2_v(v))
 

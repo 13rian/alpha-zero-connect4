@@ -63,7 +63,7 @@ class MCTS:
         """
         Performs one iteration of the monte-carlo tree search.
         The method is recursively called until a leaf node is found. This is a game
-        state from wich no simulation (playout) has yet been initiated. If the leaf note
+        state from which no simulation (playout) has yet been initiated. If the leaf note
         is a terminal state, the reward is returned. If the leaf node is not a terminal node
         the value is estimated with the neural network. 
         The move (action) with the highest upper confidence bound is chosen. The fewer a move was
@@ -87,9 +87,6 @@ class MCTS:
         s = board.state_id()
         player = board.player
         if s not in self.P:
-            batch, _ = board.white_perspective()
-            batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
-
             # check if the position is in the position cache
             if s in position_cache:
                 net_values = position_cache[s]
@@ -97,29 +94,33 @@ class MCTS:
                 v = net_values[1]
 
             else:
+                batch, _ = board.white_perspective()
+                batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
                 self.P[s], v = net(batch)
                 self.P[s] = self.P[s].detach().squeeze().cpu().numpy()
                 v = v.item()
+
+                # ensure that the summed probability of all valid moves is 1
+                legal_moves = np.array(board.legal_moves)
+                legal_move_indices = np.zeros(CONST.BOARD_WIDTH)
+                legal_move_indices[legal_moves] = 1
+                self.P[s] = self.P[s] * legal_move_indices
+                total_prob = np.sum(self.P[s])
+                if total_prob > 0:
+                    self.P[s] /= total_prob  # normalize the probabilities
+
+                else:
+                    # the network did not choose any legal move, make all moves equally probable
+                    print("warning: total probabilities estimated by the network for all legal moves is smaller than 0")
+                    self.P[s][legal_moves] = 1 / len(legal_moves)
+
+                # add the position to the position cache
                 position_cache[s] = (self.P[s], v)
-
-            # ensure that the summed probability of all valid moves is 1
-            legal_moves = np.array(board.legal_moves)
-            legal_move_indices = np.zeros(CONST.BOARD_WIDTH)
-            legal_move_indices[legal_moves] = 1
-            self.P[s] = self.P[s] * legal_move_indices
-            total_prob = np.sum(self.P[s])
-            if total_prob > 0:
-                self.P[s] /= total_prob  # normalize the probabilities
-
-            else:
-                # the network did not choose any legal move, make all moves equally probable
-                print("warning: total probabilities estimated by the network for all legal moves is smaller than 0")
-                self.P[s][legal_moves] = 1 / len(legal_moves)
 
             self.N_s[s] = 0
             return v
 
-        # add dirichlet noise for the root node
+        # add dirichlet noise to the root node
         p_s = self.P[s]
         if alpha_dirich > 0:
             p_s = np.copy(p_s)

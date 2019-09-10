@@ -15,26 +15,13 @@ logger = logging.getLogger('Connect4')
 
 
 class Agent:
-    def __init__(self, network, mcts_sim_count, c_puct, temp, batch_size, exp_buffer_size):
+    def __init__(self, network):
         """
-        :param learning_rate:       learning rate for the neural network
-        :param n_filters:           the number of filters in the convolutional layers
-        :param mcts_sim_count:      the number of simulations for the monte-carlo tree search
-        :param c_puct:              the higher this constant the more the mcts explores
-        :param temp:                the temperature, controls the policy value distribution
-        :param batch_size:          the experience buffer batch size to train the training network
-        :param exp_buffer_size:     the size of the experience replay buffer
+        :param network:       alpha zero network that is used for training and evaluation
         """
 
-        self.network = network                                       # the network
-        self.mcts_sim_count = mcts_sim_count                         # the number of simulations for the monte-carlo tree search
-        self.c_puct = c_puct                                         # the higher this constant the more the mcts explores
-        self.temp = temp                                             # the temperature, controls the policy value distribution
-        self.batch_size = batch_size                                 # the size of the experience replay buffer
-
-        self.board = connect4.BitBoard()                             # connect4 board
-        self.exp_buffer_size = exp_buffer_size                       # the size of the experience buffer
-        self.experience_buffer = ExperienceBuffer(exp_buffer_size)   # buffer that saves all experiences
+        self.network = network                                              # the network
+        self.experience_buffer = ExperienceBuffer(Config.exp_buffer_size)   # buffer that saves all experiences
 
         # activate the evaluation mode of the networks
         self.network = data_storage.net_to_device(self.network, Config.evaluation_device)
@@ -42,40 +29,31 @@ class Agent:
 
 
     def clear_experience_buffer(self):
-        self.experience_buffer = ExperienceBuffer(self.exp_buffer_size)
+        self.experience_buffer = ExperienceBuffer(Config.exp_buffer_size)
 
 
     # from utils import utils
     # @utils.profile
-    def play_self_play_games(self, network_path, game_count, temp_threshold, alpha_dirich=0):
+    def play_self_play_games(self, network_path):
         """
         plays some games against itself and adds the experience into the experience buffer
         :param network_path     the path of the current network
         :param game_count:      the number of games to play
-        :param temp_threshold:  up to this move the temp will be temp, after the threshold it will be set to 0
-                                plays a game against itself with some exploratory moves in it
-        :param alpha_dirich     alpha parameter for the dirichlet noise that is added to the root node
         :return:                the average nu,ber of moves played in a game
         """
 
         if Globals.pool is None:
             position_cache = {}
-            self_play_results = [__self_play_worker__(network_path, position_cache, self.mcts_sim_count, self.c_puct,
-                                                      temp_threshold, self.temp, alpha_dirich, game_count)]
+            self_play_results = [__self_play_worker__(network_path, position_cache, Config.episode_count)]
         else:
             # create the shared dict for the position cache
             manager = Manager()
             position_cache = manager.dict()
 
-            games_per_process = int(game_count / Globals.n_pool_processes)
+            games_per_process = int(Config.episode_count / Globals.n_pool_processes)
             self_play_results = Globals.pool.starmap(__self_play_worker__,
                                                       zip([network_path] * Globals.n_pool_processes,
                                                           [position_cache] * Globals.n_pool_processes,
-                                                          [self.mcts_sim_count] * Globals.n_pool_processes,
-                                                          [self.c_puct] * Globals.n_pool_processes,
-                                                          [temp_threshold] * Globals.n_pool_processes,
-                                                          [self.temp] * Globals.n_pool_processes,
-                                                          [alpha_dirich] * Globals.n_pool_processes,
                                                           [games_per_process] * Globals.n_pool_processes))
 
         # add the training examples to the experience buffer
@@ -95,15 +73,14 @@ class Agent:
             new_policy = torch.flip(policy, [1])
             self.experience_buffer.add_batch(new_state, new_policy, value)
 
-        avg_game_length = tot_moves_played / game_count
+        avg_game_length = tot_moves_played / Config.episode_count
         return avg_game_length
 
 
 
-    def nn_update(self, epoch_count):
+    def nn_update(self):
         """
         updates the neural network by picking a random batch form the experience replay
-        :param epoch_count:     number of times to pass all training examples through the network
         :return:                average policy and value loss over all mini batches
         """
 
@@ -114,16 +91,16 @@ class Agent:
         avg_loss_p = 0
         avg_loss_v = 0
         tot_batch_count = 0
-        for epoch in range(epoch_count):
+        for epoch in range(Config.epoch_count):
             # shuffle all training examples
-            num_training_examples = self.experience_buffer.size - (self.experience_buffer.size % self.batch_size)
+            num_training_examples = self.experience_buffer.size - (self.experience_buffer.size % Config.batch_size)
             states, policies, values = self.experience_buffer.random_batch(num_training_examples)
 
             # train the network with all training examples
-            num_batches = int(num_training_examples / self.batch_size)
+            num_batches = int(num_training_examples / Config.batch_size)
             for batch_num in range(num_batches):
-                start_batch = batch_num * self.batch_size
-                end_batch = (batch_num+1) * self.batch_size
+                start_batch = batch_num * Config.batch_size
+                end_batch = (batch_num+1) * Config.batch_size
                 loss_p, loss_v = self.network.train_step(states[start_batch:end_batch],
                                                          policies[start_batch:end_batch],
                                                          values[start_batch:end_batch])
@@ -151,7 +128,7 @@ class Agent:
         :return:                the mean score against the random player 0: lose, 0.5 draw, 1: win
         """
 
-        az_player = tournament.AlphaZeroPlayer(self.network, self.c_puct, self.mcts_sim_count, 0)
+        az_player = tournament.AlphaZeroPlayer(self.network, Config.c_puct, Config.mcts_sim_count, 0)
         random_player = tournament.RandomPlayer()
         score = tournament.play_one_color(game_count, az_player, color, random_player)
         return score
@@ -242,16 +219,11 @@ def net_vs_net(net1, net2, game_count, mcts_sim_count, c_puct, temp):
     return score1
 
 
-def __self_play_worker__(network_path, position_cache, mcts_sim_count, c_puct, temp_threshold, temp, alpha_dirich, game_count):
+def __self_play_worker__(network_path, position_cache, game_count):
     """
     plays a number of self play games
     :param network_path:        path of the network
     :param position_cache:      holds positions already evaluated by the network
-    :param mcts_sim_count:      the monte carlo simulation count
-    :param c_puct:              constant that controls the exploration
-    :param temp_threshold:      up to this move count the temperature will be temp, later it will be 0
-    :param temp:                the temperature
-    :param alpha_dirich:        dirichlet parameter alpha
     :param game_count:          the number of self-play games to play
     :return:                    state_list, policy_list, value_list
     """
@@ -262,13 +234,13 @@ def __self_play_worker__(network_path, position_cache, mcts_sim_count, c_puct, t
     state_list = []
     policy_list = []
     value_list = []
-    q_list = []
+    # q_list = []
     # position_cache = {}   # give each simulation its own state dict
     # position_count_dict = {}
 
     for i in range(game_count):
         board = connect4.BitBoard()
-        mcts = MCTS(c_puct)  # reset the search tree
+        mcts = MCTS(Config.c_puct)  # reset the search tree
 
         # reset the players list
         player_list = []
@@ -276,28 +248,29 @@ def __self_play_worker__(network_path, position_cache, mcts_sim_count, c_puct, t
         move_count = 0
         while not board.terminal:
             state, player = board.white_perspective()
-            temp = 0 if move_count >= temp_threshold else temp
-            policy = mcts.policy_values(board, position_cache, net, mcts_sim_count, temp, alpha_dirich)
-            s = board.state_id()
+            temp = 0 if move_count >= Config.temp_threshold else Config.temp
+            policy = mcts.policy_values(board, position_cache, net, Config.mcts_sim_count, temp, Config.alpha_dirich)
+            # s = board.state_id()
 
             # sample from the policy to determine the move to play
             move = np.random.choice(len(policy), p=policy)
-            q_value = mcts.Q.get((s, move), 0)
+            # q_value = mcts.Q.get((s, move), 0)
             board.play_move(move)
 
             # save the training example
             state_list.append(state)
             player_list.append(player)
             policy_list.append(policy)
-            q_list.append(q_value)
+            # q_list.append(q_value)
             move_count += 1
 
         # calculate the values from the perspective of the player who's move it is
         # modification to alpha-zero: average value and q_value
         reward = board.training_reward()
         for idx, player in enumerate(player_list):
-            value = (reward + q_list[idx]) / 2
-            value = value if player == CONST.WHITE else -value
+            # value = (reward + q_list[idx]) / 2
+            # value = value if player == CONST.WHITE else -value
+            value = reward if player == CONST.WHITE else -reward
             value_list.append(value)
 
     # delete the network
