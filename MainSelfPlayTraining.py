@@ -41,7 +41,6 @@ def mainTrain():
         agent.network = training_data.load_current_net()
         agent.experience_buffer = training_data.experience_buffer
 
-
     start_training = time.time()
     for i in range(training_data.cycle, Config.cycle_count, 1):
         ###### self play and update: create some game data through self play
@@ -56,8 +55,8 @@ def mainTrain():
         loss_p, loss_v = agent.nn_update()
         training_data.policy_loss.append(loss_p)
         training_data.value_loss.append(loss_v)
-        print("policy loss: ", loss_p)
-        print("value loss: ", loss_v)
+        logger.debug("policy loss: {}".format(loss_p))
+        logger.debug("value loss: {}".format(loss_v))
 
 
         ###### save the new network

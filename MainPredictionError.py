@@ -32,10 +32,16 @@ def net_prediction_error(net, test_set):
     :return:            error percentage
     """
 
-    tot_positions = 140   # test_set.shape[0]   # the total number of positions in the test set
+    tot_positions = test_set.shape[0]   # test_set.shape[0]   # the total number of positions in the test set
     correct_predictions = 0             # the correctly predicted positions in the test set
+    tot_predictions = 0
 
-    for j in range(tot_positions):
+    for j in range(tot_positions):      # tot_positions
+        # ignore losing and drawing positions
+        if test_set["score"][j] <= 0:
+            continue
+
+
         # load the board
         board = connect4.BitBoard()
         board.from_position(test_set["position"][j], test_set["disk_mask"][j])
@@ -46,7 +52,9 @@ def net_prediction_error(net, test_set):
         batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
 
         # find the predicted move
-        policy, _ = net(batch)
+        policy, value = net(batch)
+        #print(value)
+        #print(policy)
         _, move = policy.max(1)
         move = move.item()
 
@@ -54,8 +62,10 @@ def net_prediction_error(net, test_set):
         if str(move) in test_set["moves"][j]:
             correct_predictions += 1
 
+        tot_predictions += 1
+
     # calculate the prediction error
-    pred_error = (tot_positions - correct_predictions) / tot_positions * 100
+    pred_error = (tot_predictions - correct_predictions) / tot_predictions * 100
     return pred_error
 
 
@@ -69,11 +79,16 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, temp):
     :return:            error percentage
     """
 
-    tot_positions = 140        # test_set.shape[0]   # the total number of positions in the test set
+    tot_positions = test_set.shape[0]        # test_set.shape[0]   # the total number of positions in the test set
     correct_predictions = 0             # the correctly predicted positions in the test set
+    tot_predictions = 0
 
     # mcts
-    for j in range(tot_positions):
+    for j in range(tot_positions):      # tot_positions
+        # ignore losing and drawing positions
+        if test_set["score"][j] <= 0:
+            continue
+
         mcts_net = mcts.MCTS(c_puct)
 
         # load the board
@@ -87,8 +102,10 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, temp):
         if str(move) in test_set["moves"][j]:
             correct_predictions += 1
 
+        tot_predictions += 1
+
     # calculate the prediction error
-    pred_error = (tot_positions - correct_predictions) / tot_positions * 100
+    pred_error = (tot_predictions - correct_predictions) / tot_predictions * 100
     return pred_error
 
 
@@ -172,16 +189,16 @@ path_list.sort(key=utils.natural_keys)
 
 
 
-# # get the prediction error of all networks
-# for i in range(len(path_list)):
-#     generation.append(i)
-#     net_path = network_dir + path_list[i]
-#     net = data_storage.load_net(net_path, Config.evaluation_device)
-#
-#     error = net_prediction_error(net, test_set)
-#     net_prediciton_error.append(error)
-#     print("error: ", error, "network: ", net_path)
-#
+# get the prediction error of all networks
+for i in range(len(path_list)):
+    generation.append(i)
+    net_path = network_dir + path_list[i]
+    net = data_storage.load_net(net_path, Config.evaluation_device)
+
+    error = net_prediction_error(net, test_set)
+    net_prediciton_error.append(error)
+    print("error: ", error, "network: ", net_path)
+
 
 
 

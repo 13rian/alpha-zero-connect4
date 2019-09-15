@@ -164,7 +164,8 @@ class BitBoard:
         uses the cantor pairing function to create one unique id for the state form the two integers representing the
         board state
         """
-        state = "{}_{}".format(self.position, self.disk_mask)
+        # state = "{}_{}".format(self.position, self.disk_mask)
+        state = self.position + self.disk_mask
         return state
 
 
@@ -290,14 +291,20 @@ class BitBoard:
 
     def training_reward(self):
         """
-        returns the reward for training that prefers a quick win over a slow win
+        returns the reward for training
         :return:
         """
 
         if not self.terminal:
             return 0
         else:
-            return self.score * (1.18 - (9*self.move_count) / 350)
+            return self.score
+
+        # the reward below prefers quick wins over slow wins
+        # if not self.terminal:
+        #     return 0
+        # else:
+        #     return self.score * (1.18 - (9*self.move_count) / 350)
 
 
     def white_score(self):

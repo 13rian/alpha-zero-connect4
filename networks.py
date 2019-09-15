@@ -150,10 +150,10 @@ class ResBlock(nn.Module):
 
     def __init__(self, n_filters):
         super(ResBlock, self).__init__()
-        self.conv1 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1, padding=1)  #bias=False
         self.bn1 = nn.BatchNorm2d(n_filters)
 
-        self.conv2 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(n_filters, n_filters, kernel_size=3, stride=1, padding=1)
         self.bn2 = nn.BatchNorm2d(n_filters)
 
     def forward(self, x):
@@ -166,7 +166,6 @@ class ResBlock(nn.Module):
         # conv2 with the skip connection
         out = F.relu(self.bn2(self.conv2(out)) + residual)
 
-        # skip connection
         return out
 
 
@@ -262,7 +261,7 @@ class ResNet(nn.Module):
         # create the label
         target_p = target_p.to(Config.training_device)
         target_v = target_v.to(Config.training_device)
-        criterion_p = nn.MSELoss()
+        criterion_p = nn.BCELoss()
         criterion_v = nn.MSELoss()
 
         # define the loss

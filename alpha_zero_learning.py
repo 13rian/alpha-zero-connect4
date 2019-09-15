@@ -1,6 +1,7 @@
 from multiprocessing import Manager
 import numpy as np
 import logging
+import random
 
 import torch
 
@@ -20,16 +21,12 @@ class Agent:
         :param network:       alpha zero network that is used for training and evaluation
         """
 
-        self.network = network                                              # the network
-        self.experience_buffer = ExperienceBuffer(Config.exp_buffer_size)   # buffer that saves all experiences
+        self.network = network                        # the network
+        self.experience_buffer = ExperienceBuffer()   # buffer that saves all experiences
 
         # activate the evaluation mode of the networks
         self.network = data_storage.net_to_device(self.network, Config.evaluation_device)
         self.network.eval()
-
-
-    def clear_experience_buffer(self):
-        self.experience_buffer = ExperienceBuffer(Config.exp_buffer_size)
 
 
     # from utils import utils
@@ -57,25 +54,19 @@ class Agent:
                                                           [games_per_process] * Globals.n_pool_processes))
 
         # add the training examples to the experience buffer
-        logger.info("start to augment the training examples by using the game symmetry")
+        logger.info("start to prepare the training data")
+        self.experience_buffer.add_new_cycle()
         tot_moves_played = 0
         for sample in self_play_results:
-            state = torch.Tensor(sample[0]).to(Config.training_device)
-            policy = torch.Tensor(sample[1]).reshape(-1, CONST.BOARD_WIDTH).to(Config.training_device)
-            value = torch.Tensor(sample[2]).unsqueeze(1).to(Config.training_device)
-            tot_moves_played += state.shape[0]
+            tot_moves_played += len(sample)
 
             # add the original data
-            self.experience_buffer.add_batch(state, policy, value)
+            self.experience_buffer.add_data(sample)
 
-            # flip it vertically
-            new_state = torch.flip(state, [3])
-            new_policy = torch.flip(policy, [1])
-            self.experience_buffer.add_batch(new_state, new_policy, value)
+        self.experience_buffer.prepare_data(Config.window_size)
 
         avg_game_length = tot_moves_played / Config.episode_count
         return avg_game_length
-
 
 
     def nn_update(self):
@@ -93,7 +84,7 @@ class Agent:
         tot_batch_count = 0
         for epoch in range(Config.epoch_count):
             # shuffle all training examples
-            num_training_examples = self.experience_buffer.size - (self.experience_buffer.size % Config.batch_size)
+            num_training_examples = self.experience_buffer.data_size - (self.experience_buffer.data_size % Config.batch_size)
             states, policies, values = self.experience_buffer.random_batch(num_training_examples)
 
             # train the network with all training examples
@@ -135,58 +126,68 @@ class Agent:
 
 
 class ExperienceBuffer:
-    def __init__(self, max_size):
-        self.max_size = max_size
+    def __init__(self):
+        self.training_cycles = []       # holds a list with the training data of different cycles
 
-        self.state = torch.empty(max_size, 2, 6, 7).to(Config.training_device)
-        self.policy = torch.empty(max_size, CONST.BOARD_WIDTH).to(Config.training_device)
-        self.value = torch.empty(max_size, 1).to(Config.training_device)
+        # to save the current training data
+        self.data_size = 0
+        self.state = None
+        self.policy = None
+        self.value = None
 
-        self.size = 0  # size of the buffer
-        self.ring_index = 0  # current index of where the next sample is added
 
-
-    def add_batch(self, states, policies, values):
+    def add_new_cycle(self):
         """
-        adds the multiple experiences to the buffer
-        :param states:           the state s_t
-        :param policies:         probability value for all actions
-        :param values:           value of the current state
-        :return:
+        adds a new training cycle to the training cycle list
         :return:
         """
+        self.training_cycles.append([])
 
-        sample_count = values.shape[0]
-        start_index = self.ring_index
-        end_index = self.ring_index + sample_count
 
-        # check if the index is not too large
-        if end_index > self.max_size:
-            end_index = self.max_size
-            batch_end_index = end_index - start_index
+    def add_data(self, training_examples):
+        """
+        adds the passed training examples to the experience buffer
+        :param training_examples:    list containing the training examples
+        :return:
+        """
 
-            # add all elements until the end of the ring buffer array
-            self.add_batch(states[0:batch_end_index, :],
-                           policies[0:batch_end_index, :],
-                           values[0:batch_end_index])
+        self.training_cycles[-1] += training_examples
 
-            # add the rest of the elements at the beginning of the buffer
-            self.add_batch(states[batch_end_index:, :],
-                           policies[batch_end_index:, :],
-                           values[batch_end_index:])
-            return
 
-        # add the elements into the ring buffer
-        self.state[start_index:end_index, :] = states
-        self.policy[start_index:end_index, :] = policies
-        self.value[start_index:end_index] = values
+    def prepare_data(self, window_size):
+        """
+        prepares the training data for training
+        :param window_size:     the size of the window (number of cycles)
+        :return:
+        """
 
-        # update indices and size
-        self.ring_index += sample_count
-        self.ring_index = self.ring_index % self.max_size
+        # get rid of old data
+        while len(self.training_cycles) > window_size:
+            self.training_cycles.pop(0)
 
-        if self.size < self.max_size:
-            self.size += sample_count
+        # get the whole training data
+        training_data = []
+        for sample in self.training_cycles:
+            training_data += sample
+
+        # sort the list by state id of the positions in order to be able to average them
+
+
+        # prepare the training data
+        self.data_size = len(training_data)
+        self.state = torch.empty(self.data_size, 2, CONST.BOARD_HEIGHT, CONST.BOARD_WIDTH)
+        self.policy = torch.empty(self.data_size, CONST.BOARD_WIDTH).to(Config.evaluation_device)
+        self.value = torch.empty(self.data_size, 1)
+
+        for idx, sample in enumerate(training_data):
+            self.state[idx, :] = torch.Tensor(sample.get("state"))
+            self.policy[idx, :] = torch.Tensor(sample.get("policy"))
+            self.value[idx, :] = sample.get("value")
+
+        # copy everything to the training device
+        self.state = self.state.to(Config.training_device)
+        self.policy = self.policy.to(Config.training_device)
+        self.value = self.value.to(Config.training_device)
 
 
     def random_batch(self, batch_size):
@@ -195,9 +196,8 @@ class ExperienceBuffer:
         :param batch_size:   the size of the batch
         :return:             state, policy, value
         """
-
-        sample_size = batch_size if self.size > batch_size else self.size
-        idx = np.random.choice(self.size, sample_size, replace=False)
+        sample_size = batch_size if self.data_size > batch_size else self.data_size
+        idx = np.random.choice(self.data_size, sample_size, replace=False)
         return self.state[idx, :], self.policy[idx, :], self.value[idx]
 
 
@@ -225,15 +225,13 @@ def __self_play_worker__(network_path, position_cache, game_count):
     :param network_path:        path of the network
     :param position_cache:      holds positions already evaluated by the network
     :param game_count:          the number of self-play games to play
-    :return:                    state_list, policy_list, value_list
+    :return:                    a list of dictionaries with all training examples
     """
 
     # load the network
     net = data_storage.load_net(network_path, Config.evaluation_device)
 
-    state_list = []
-    policy_list = []
-    value_list = []
+    training_expl_list = []
     # q_list = []
     # position_cache = {}   # give each simulation its own state dict
     # position_count_dict = {}
@@ -242,14 +240,24 @@ def __self_play_worker__(network_path, position_cache, game_count):
         board = connect4.BitBoard()
         mcts = MCTS(Config.c_puct)  # reset the search tree
 
-        # reset the players list
+        # reset the lists
+
         player_list = []
+        state_list = []
+        state_id_list = []
+        policy_list = []
 
         move_count = 0
         while not board.terminal:
             state, player = board.white_perspective()
+            state_id = board.state_id()
+            state_list.append(state)
+            state_id_list.append(state_id)
+            player_list.append(player)
+
             temp = 0 if move_count >= Config.temp_threshold else Config.temp
             policy = mcts.policy_values(board, position_cache, net, Config.mcts_sim_count, temp, Config.alpha_dirich)
+            policy_list.append(policy)
             # s = board.state_id()
 
             # sample from the policy to determine the move to play
@@ -258,9 +266,6 @@ def __self_play_worker__(network_path, position_cache, game_count):
             board.play_move(move)
 
             # save the training example
-            state_list.append(state)
-            player_list.append(player)
-            policy_list.append(policy)
             # q_list.append(q_value)
             move_count += 1
 
@@ -271,10 +276,18 @@ def __self_play_worker__(network_path, position_cache, game_count):
             # value = (reward + q_list[idx]) / 2
             # value = value if player == CONST.WHITE else -value
             value = reward if player == CONST.WHITE else -reward
-            value_list.append(value)
+
+            # save the training example
+            training_expl_list.append({
+                "state": state_list[idx],
+                "state_id": state_id_list[idx],
+                "player": player_list[idx],
+                "policy": policy_list[idx],
+                "value": value
+            })
 
     # delete the network
     del net
     torch.cuda.empty_cache()
 
-    return state_list, policy_list, value_list
+    return training_expl_list
