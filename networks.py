@@ -203,7 +203,6 @@ class OutBlock(nn.Module):
         return p, v
 
 
-
 class ResNet(nn.Module):
     """
     defines a resudual neural network that ends in fully connected layers
@@ -261,11 +260,12 @@ class ResNet(nn.Module):
         # create the label
         target_p = target_p.to(Config.training_device)
         target_v = target_v.to(Config.training_device)
-        criterion_p = nn.BCELoss()
+        # criterion_p = nn.KLDivLoss()
+        # criterion_p(torch.log(1e-8 + prediction_p), target_p)
         criterion_v = nn.MSELoss()
 
         # define the loss
-        loss_p = criterion_p(prediction_p, target_p)
+        loss_p = - torch.sum(target_p * torch.log(1e-8 + prediction_p), 1).mean() / target_p.shape[1]
         loss_v = criterion_v(prediction_v, target_v)
         loss = loss_p + loss_v
         loss.backward()  # back propagation

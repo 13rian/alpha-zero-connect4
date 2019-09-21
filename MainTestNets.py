@@ -14,7 +14,7 @@ random.seed(a=None, version=2)
 
 
 # define the parameters
-network_duel_game_count = 40        # number of games that are played between the old and the new network
+network_duel_game_count = 2        # number of games that are played between the old and the new network
 mcts_sim_count = 100                # the number of simulations for the monte-carlo tree search
 c_puct = 4                          # the higher this constant the more the mcts explores
 network_dir = "networks/"           # directory in which the networks are saved
@@ -27,7 +27,7 @@ path_list = os.listdir(network_dir)
 path_list.sort(key=utils.natural_keys)
 
 # get the best network
-best_network_path = network_dir + path_list[0]
+best_network_path = network_dir + path_list[-1]
 best_net = data_storage.load_net(best_network_path, Config.evaluation_device)
 for i in range(len(path_list)):
     generation.append(i)
@@ -37,7 +37,8 @@ for i in range(len(path_list)):
 
     print("play {} against the random network {}".format(net_path, best_network_path))
     # random_net = alpha_zero_learning.Network(learning_rate)
-    net_score = alpha_zero_learning.net_vs_net(net, best_net, network_duel_game_count, mcts_sim_count, c_puct, 0)
+    # net_score = alpha_zero_learning.net_vs_net_mcts(net, best_net, network_duel_game_count, mcts_sim_count, c_puct, 0)
+    net_score = alpha_zero_learning.net_vs_net(net, best_net, network_duel_game_count)
     print("score: ", net_score)
     avg_score.append(net_score)
 

@@ -1,7 +1,8 @@
-from globals import CONST
+from globals import CONST, Config
 from game import connect4
 import numpy as np
 import copy
+import torch
 
 import mcts
 
@@ -20,6 +21,35 @@ class RandomPlayer:
 
 
 class AlphaZeroPlayer:
+    """
+    player that makes a move by only looking at the policy of the neural network
+    """
+
+    def __init__(self, net):
+        """
+        :param net:                 alpha zero network
+        """
+        self.net = net
+        self.position_cache = {}
+
+
+    def play_move(self, board):
+        batch, _ = board.white_perspective()
+        batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
+        policy, value = self.net(batch)
+
+        # pick a legal move
+        _, move = policy.max(1)
+        move = move.item()
+        while not board.is_legal_move(move):
+            policy[0, move] = -1
+            _, move = policy.max(1)
+            move = move.item()
+
+        board.play_move(move)
+
+
+class AlphaZeroPlayerMcts:
     """
     player that makes a move according to the alpha zero algorithm
     """

@@ -215,7 +215,14 @@ class BitBoard:
         if self.four_in_a_row(position):
             self.terminal = True
             self.score = 1 if self.player == CONST.WHITE else -1
-        
+
+
+    def is_legal_move(self, move):
+        if move in self.legal_moves:
+            return True
+        else:
+            return False
+
 
     def random_move(self):
         if len(self.legal_moves) > 0:

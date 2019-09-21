@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import torch
+import math
 import pandas as pd
 import random
 import numpy as np
@@ -38,7 +39,7 @@ def net_prediction_error(net, test_set):
 
     for j in range(tot_positions):      # tot_positions
         # ignore losing and drawing positions
-        if test_set["score"][j] <= 0:
+        if test_set["weak_score"][j] <= 0:
             continue
 
 
@@ -47,7 +48,6 @@ def net_prediction_error(net, test_set):
         board.from_position(test_set["position"][j], test_set["disk_mask"][j])
 
         # get the white perspective
-        board.white_perspective()
         batch, _ = board.white_perspective()
         batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
 
@@ -59,7 +59,7 @@ def net_prediction_error(net, test_set):
         move = move.item()
 
         # check if the move is part of the optimal moves
-        if str(move) in test_set["moves"][j]:
+        if str(move) in str(test_set["weak_moves"][j]):
             correct_predictions += 1
 
         tot_predictions += 1
@@ -86,7 +86,7 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, temp):
     # mcts
     for j in range(tot_positions):      # tot_positions
         # ignore losing and drawing positions
-        if test_set["score"][j] <= 0:
+        if test_set["weak_score"][j] <= 0:
             continue
 
         mcts_net = mcts.MCTS(c_puct)
@@ -99,8 +99,10 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, temp):
         policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, temp)
         move = np.where(policy == 1)[0][0]
 
-        if str(move) in test_set["moves"][j]:
+        if str(move) in test_set["weak_moves"][j]:
             correct_predictions += 1
+        else:
+            print("wrong pos:" + j)
 
         tot_predictions += 1
 

@@ -201,9 +201,9 @@ class ExperienceBuffer:
         return self.state[idx, :], self.policy[idx, :], self.value[idx]
 
 
-def net_vs_net(net1, net2, game_count, mcts_sim_count, c_puct, temp):
+def net_vs_net_mcts(net1, net2, game_count, mcts_sim_count, c_puct, temp):
     """
-    lets two alpha zero networks play against each other
+    lets two alpha zero networks play against each other using the network and mcts
     :param net1:            net for player 1
     :param net2:            net for player 2
     :param game_count:      total games to play
@@ -213,8 +213,23 @@ def net_vs_net(net1, net2, game_count, mcts_sim_count, c_puct, temp):
     :return:                score of network1
     """
 
-    az_player1 = tournament.AlphaZeroPlayer(net1, c_puct, mcts_sim_count, temp)
-    az_player2 = tournament.AlphaZeroPlayer(net2, c_puct, mcts_sim_count, temp)
+    az_player1 = tournament.AlphaZeroPlayerMcts(net1, c_puct, mcts_sim_count, temp)
+    az_player2 = tournament.AlphaZeroPlayerMcts(net2, c_puct, mcts_sim_count, temp)
+    score1 = tournament.play_match(game_count, az_player1, az_player2)
+    return score1
+
+
+def net_vs_net(net1, net2, game_count):
+    """
+    lets two alpha zero networks play against each other using only the network policy without mcts
+    :param net1:            net for player 1
+    :param net2:            net for player 2
+    :param game_count:      total games to play
+    :return:                score of network1
+    """
+
+    az_player1 = tournament.AlphaZeroPlayer(net1)
+    az_player2 = tournament.AlphaZeroPlayer(net2)
     score1 = tournament.play_match(game_count, az_player1, az_player2)
     return score1
 
@@ -241,7 +256,6 @@ def __self_play_worker__(network_path, position_cache, game_count):
         mcts = MCTS(Config.c_puct)  # reset the search tree
 
         # reset the lists
-
         player_list = []
         state_list = []
         state_id_list = []

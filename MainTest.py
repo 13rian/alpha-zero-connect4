@@ -99,34 +99,34 @@ import data_storage
 # board.print()
 # print(board.terminal)
 
-#test the reward
-mat = np.array(
-    [[0, 0, 0, 0, 0, 0, 0],
-     [1, 0, 0, 0, 0, 0, 0],
-     [1, 0, 0, 0, 0, 0, 0],
-     [1, 2, 2, 2, 0, 1, 0],
-     [2, 2, 1, 2, 1, 2, 1],
-     [1, 1, 2, 2, 1, 1, 2]]
-)
-board = connect4.BitBoard()
-board.from_board_matrix(mat)
-board.play_move(4)
-board.print()
-print(board.training_reward())
+# #test the reward
+# mat = np.array(
+#     [[0, 0, 0, 0, 0, 0, 0],
+#      [1, 0, 0, 0, 0, 0, 0],
+#      [1, 0, 0, 0, 0, 0, 0],
+#      [1, 2, 2, 2, 0, 1, 0],
+#      [2, 2, 1, 2, 1, 2, 1],
+#      [1, 1, 2, 2, 1, 1, 2]]
+# )
+# board = connect4.BitBoard()
+# board.from_board_matrix(mat)
+# board.play_move(4)
+# board.print()
+# print(board.training_reward())
 
 
 
 # test policy
-best_net = data_storage.load_net("networks/network_gen_37.pt", torch.device('cpu'))
+best_net = data_storage.load_net("networks/network_gen_52.pt", torch.device('cpu'))
 random_net = data_storage.load_net("networks/network_gen_0.pt", torch.device('cpu'))
 
 mat = np.array(
-    [[0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0],
+    [[0, 0, 0, 2, 0, 0, 0],
+     [0, 0, 0, 1, 2, 0, 0],
      [0, 0, 0, 2, 2, 0, 0],
-     [2, 0, 0, 1, 1, 1, 0]]
+     [0, 0, 0, 1, 1, 0, 0],
+     [0, 0, 0, 2, 1, 2, 0],
+     [1, 2, 0, 1, 2, 1, 1]]
 )
 board = connect4.BitBoard()
 board.from_board_matrix(mat)
@@ -137,10 +137,56 @@ print(board.terminal)
 
 c_puct = 4
 temp = 1
-mcts_sim_count = 800
+mcts_sim_count = 200
 mcts_player = mcts.MCTS(c_puct)
 policy_best = mcts_player.policy_values(board, {}, best_net, mcts_sim_count, temp)
+
+mcts_player = mcts.MCTS(c_puct)
 policy_random = mcts_player.policy_values(board, {}, random_net, mcts_sim_count, temp)
 
 print("best: ", policy_best)
 print("random: ", policy_random)
+
+
+# net only
+batch, _ = board.white_perspective()
+batch = torch.Tensor(batch).unsqueeze(0)
+policy_best = best_net(batch)
+
+batch, _ = board.white_perspective()
+batch = torch.Tensor(batch).unsqueeze(0)
+policy_random = random_net(batch)
+
+print("best net-pol: ", policy_best)
+print("random net-pol: ", policy_random)
+
+
+
+
+# # test policy
+# best_net = data_storage.load_net("networks/network_gen_52.pt", torch.device('cpu'))
+# random_net = data_storage.load_net("networks/network_gen_0.pt", torch.device('cpu'))
+#
+# mat = np.array(
+#     [[0, 0, 0, 0, 0, 0, 0],
+#      [0, 0, 0, 0, 0, 0, 0],
+#      [0, 0, 0, 0, 0, 0, 0],
+#      [0, 0, 0, 0, 0, 0, 0],
+#      [0, 0, 2, 2, 2, 0, 0],
+#      [0, 0, 1, 1, 1, 0, 0]]
+# )
+# board = connect4.BitBoard()
+# board.from_board_matrix(mat)
+#
+#
+# # board.play_move(6)
+# print(board.terminal)
+#
+# c_puct = 4
+# temp = 1
+# mcts_sim_count = 800
+# mcts_player = mcts.MCTS(c_puct)
+# policy_random = mcts_player.policy_values(board, {}, random_net, mcts_sim_count, temp)
+#
+# print("random: ", policy_random)
+
