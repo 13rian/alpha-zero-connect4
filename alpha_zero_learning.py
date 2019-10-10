@@ -1,7 +1,7 @@
 from multiprocessing import Manager
 import numpy as np
 import logging
-import random
+from operator import itemgetter
 
 import torch
 
@@ -58,7 +58,7 @@ class Agent:
         self.experience_buffer.add_new_cycle()
         tot_moves_played = 0
         for sample in self_play_results:
-            tot_moves_played += len(sample)
+            tot_moves_played += len(sample) / 2            # divide by two as symmetric positions were added
 
             # add the original data
             self.experience_buffer.add_data(sample)
@@ -170,7 +170,8 @@ class ExperienceBuffer:
         for sample in self.training_cycles:
             training_data += sample
 
-        # sort the list by state id of the positions in order to be able to average them
+        # average the positions (early positions are overrepresented)
+        training_data = self.__average_positions__(training_data)
 
 
         # prepare the training data
@@ -184,10 +185,53 @@ class ExperienceBuffer:
             self.policy[idx, :] = torch.Tensor(sample.get("policy"))
             self.value[idx, :] = sample.get("value")
 
-        # copy everything to the training device
-        self.state = self.state.to(Config.training_device)
-        self.policy = self.policy.to(Config.training_device)
-        self.value = self.value.to(Config.training_device)
+        # # copy everything to the training device
+        # self.state = self.state.to(Config.training_device)
+        # self.policy = self.policy.to(Config.training_device)
+        # self.value = self.value.to(Config.training_device)
+
+
+    def __average_positions__(self, training_data):
+        """
+        calculates the average over same positions, since connect4 only has a few reasonable starting
+        lines the position at the beginning are overrepresented in the data set.
+        :param training_data:   list of training samples
+        :return:                list of averaged training samples that does not contain position duplicates
+        """
+        training_data = sorted(training_data, key=itemgetter('state_id'))
+
+        training_data_avg = []
+        state_id = training_data[0].get("state_id")
+        state = training_data[0].get("state")
+        position_count = 0
+        policy = 0
+        value = 0
+        for position in training_data:
+            if state_id == position.get("state_id"):
+                policy = np.add(policy, position.get("policy"))
+                value += position.get("value")
+                position_count += 1
+
+            else:
+                policy = np.divide(policy, np.sum(policy))     # normalize the policy
+
+                averaged_sample = {
+                    "state_id": state_id,
+                    "state": state,
+                    "policy": policy,
+                    "value": value / position_count
+                }
+                training_data_avg.append(averaged_sample)
+
+                state_id = position.get("state_id")
+                state = position.get("state")
+                policy = position.get("policy")
+                value = position.get("value")
+                position_count = 1
+
+        size_reduction = (len(training_data) - len(training_data_avg)) / len(training_data)
+        logger.debug("size reduction due to position averaging: {}".format(size_reduction))
+        return training_data_avg
 
 
     def random_batch(self, batch_size):
@@ -263,16 +307,30 @@ def __self_play_worker__(network_path, position_cache, game_count):
 
         move_count = 0
         while not board.terminal:
+            # add regular board
             state, player = board.white_perspective()
             state_id = board.state_id()
             state_list.append(state)
             state_id_list.append(state_id)
             player_list.append(player)
 
+            # add mirrored board
+            board_mirrored = board.mirror()
+            state_m, player_m = board_mirrored.white_perspective()
+            state_id_m = board_mirrored.state_id()
+            state_list.append(state_m)
+            state_id_list.append(state_id_m)
+            player_list.append(player_m)
+
+            # get the policy from the mcts
             temp = 0 if move_count >= Config.temp_threshold else Config.temp
             policy = mcts.policy_values(board, position_cache, net, Config.mcts_sim_count, temp, Config.alpha_dirich)
             policy_list.append(policy)
             # s = board.state_id()
+
+            # add the mirrored policy as well
+            policy_m = np.flip(policy)
+            policy_list.append(policy_m)
 
             # sample from the policy to determine the move to play
             move = np.random.choice(len(policy), p=policy)

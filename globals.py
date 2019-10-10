@@ -22,7 +22,7 @@ class Config:
 	# hyperparameters
 	cycle_count = 1000  	# the number of alpha zero cycles
 	episode_count = 210  	# the number of games that are self-played in one cycle 2000
-	epoch_count = 2  		# the number of times all training examples are passed through the network 10
+	epoch_count = 4  		# the number of times all training examples are passed through the network 10
 	mcts_sim_count = 200  	# the number of simulations for the monte-carlo tree search 800
 	c_puct = 4 	 			# the higher this constant the more the mcts explores 4
 	temp = 1  				# the temperature, controls the policy value distribution
@@ -33,4 +33,4 @@ class Config:
 	dropout = 0.2  			# dropout probability for the fully connected layers 0.3
 	n_blocks = 15  			# number of residual blocks
 	batch_size = 256  		# the batch size of the experience buffer for the neural network training
-	window_size = 50 		# size of the training window (number of cycles for the training data)
+	window_size = 100 		# size of the training window (number of cycles for the training data)

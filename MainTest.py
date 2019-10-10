@@ -117,8 +117,8 @@ import data_storage
 
 
 # test policy
-best_net = data_storage.load_net("networks/network_gen_52.pt", torch.device('cpu'))
-random_net = data_storage.load_net("networks/network_gen_0.pt", torch.device('cpu'))
+best_net = None    # data_storage.load_net("networks/network_gen_52.pt", torch.device('cpu'))
+random_net = None  # data_storage.load_net("networks/network_gen_0.pt", torch.device('cpu'))
 
 mat = np.array(
     [[0, 0, 0, 2, 0, 0, 0],
@@ -130,6 +130,10 @@ mat = np.array(
 )
 board = connect4.BitBoard()
 board.from_board_matrix(mat)
+
+board.print()
+board_mirrored = board.mirror()
+board_mirrored.print()
 
 
 # board.play_move(6)

@@ -41,6 +41,40 @@ class BitBoard:
         """
         board = copy.deepcopy(self)
         return board
+
+
+    def mirror(self):
+        """
+        returns a position that is mirrored on the y - axis
+        :return:
+        """
+        mirrored_position = self.clone()
+        mirrored_position.position = self.mirror_board_number(self.position)
+        mirrored_position.disk_mask = self.mirror_board_number(self.disk_mask)
+        return mirrored_position
+
+    def mirror_board_number(self, number):
+        """
+        mirrors the passed number representing a board
+        :param number:  any number representing some board configuration (position, board mask, disk maksk etc)
+        :return:
+        """
+        mirrored_number = 0
+
+        # left half of the board
+        for col in range((CONST.BOARD_WIDTH+1) // 2 - 1):
+            mirrored_number += (number & column_mask(col)) << ((CONST.BOARD_WIDTH - (2 * col + 1)) * (CONST.BOARD_HEIGHT + 1))
+
+        # right half of the board
+        for col in range((CONST.BOARD_WIDTH+1) // 2 - 1):
+            mirrored_number += (number & column_mask(CONST.BOARD_WIDTH - col - 1)) >> ((CONST.BOARD_WIDTH - (2 * col + 1)) * (CONST.BOARD_HEIGHT + 1))
+
+        # center row
+        if CONST.BOARD_WIDTH % 2 != 0:
+            col = CONST.BOARD_WIDTH // 2
+            mirrored_number += (number & column_mask(col))
+
+        return mirrored_number
         
     
     #################################################################################################
@@ -91,6 +125,7 @@ class BitBoard:
         self.position = position
         self.disk_mask = disk_mask
         self.move_count = utils.popcount(disk_mask)
+        self.player = self.move_count % 2
 
         # calculate all legal moves and disks to flip
         self.__calc_legal_moves__()
@@ -322,3 +357,13 @@ class BitBoard:
     def black_score(self):
         reward = self.reward()
         return (-reward + 1) / 2
+
+
+
+def column_mask(col):
+    """
+    bitmask with all cells of the passed column
+    :param col:     board column
+    :return:
+    """
+    return ((1 << CONST.BOARD_HEIGHT) - 1) << col * (CONST.BOARD_HEIGHT + 1)

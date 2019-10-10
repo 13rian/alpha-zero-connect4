@@ -13,6 +13,8 @@ from game import connect4
 from globals import Config
 import data_storage
 
+np.set_printoptions(suppress=True, precision=6)
+
 
 # set the random seed
 random.seed(a=None, version=2)
@@ -22,6 +24,7 @@ temp = 0
 mcts_sim_count = 200
 test_set_path = "test_set/positions.csv"
 network_dir = "networks/"           # directory in which the networks are saved
+
 
 
 def net_prediction_error(net, test_set):
@@ -61,6 +64,13 @@ def net_prediction_error(net, test_set):
         # check if the move is part of the optimal moves
         if str(move) in str(test_set["weak_moves"][j]):
             correct_predictions += 1
+        else:
+            print("pred: {} wrong pos".format(move))
+            print("v: ", value.item())
+            print("p: ", policy.squeeze().detach().numpy())
+            board.print()
+            print(" ")
+
 
         tot_predictions += 1
 
@@ -101,8 +111,8 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, temp):
 
         if str(move) in test_set["weak_moves"][j]:
             correct_predictions += 1
-        else:
-            print("wrong pos:" + j)
+        # else:
+        #     print("wrong pos:" + j)
 
         tot_predictions += 1
 
@@ -186,8 +196,36 @@ path_list = os.listdir(network_dir)
 path_list.sort(key=utils.natural_keys)
 
 
+# # random mcts prediction
+# net_path = network_dir + path_list[0]
+# net = data_storage.load_net(net_path, Config.evaluation_device)
+#
+# error = mcts_prediction_error(net, test_set, mcts_sim_count, temp)
+# mcts_prediciton_error.append(error)
+# print("mcts-error: ", error, "network: ", net_path)
+#
 
 
+
+net_path = network_dir + path_list[-1]
+net = data_storage.load_net(net_path, Config.evaluation_device)
+error = net_prediction_error(net, test_set)
+print("error: ", error, "network: ", net_path)
+
+# mcts search test
+mcts_net = mcts.MCTS(c_puct)
+board = connect4.BitBoard()
+
+# empty board test
+batch, _ = board.white_perspective()
+batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
+policy, value = net(batch)
+policy = mcts_net.policy_values(board, {}, net, 800, 1)
+
+board.from_position(50099824841353, 279245752885183)
+policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, 0)
+move = np.where(policy == 1)[0][0]
+board.print()
 
 
 
