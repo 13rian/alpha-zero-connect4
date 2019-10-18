@@ -12,6 +12,7 @@ from game import connect4
 
 from globals import Config
 import data_storage
+import networks
 
 np.set_printoptions(suppress=True, precision=6)
 
@@ -25,6 +26,7 @@ mcts_sim_count = 200
 test_set_path = "test_set/positions.csv"
 network_dir = "networks/"           # directory in which the networks are saved
 
+print("pytorch version: ", torch.__version__)
 
 
 def net_prediction_error(net, test_set):
@@ -64,12 +66,12 @@ def net_prediction_error(net, test_set):
         # check if the move is part of the optimal moves
         if str(move) in str(test_set["weak_moves"][j]):
             correct_predictions += 1
-        else:
-            print("pred: {} wrong pos".format(move))
-            print("v: ", value.item())
-            print("p: ", policy.squeeze().detach().numpy())
-            board.print()
-            print(" ")
+        # else:
+        #     print("pred: {} wrong pos".format(move))
+        #     print("v: ", value.item())
+        #     print("p: ", policy.squeeze().detach().numpy())
+        #     board.print()
+        #     print(" ")
 
 
         tot_predictions += 1
@@ -182,12 +184,6 @@ test_set = pd.read_csv(test_set_path, sep=",")
 
 
 
-
-
-
-
-
-
 # calculate the prediciton error of the networks
 generation = []
 net_prediciton_error = []
@@ -220,7 +216,15 @@ board = connect4.BitBoard()
 batch, _ = board.white_perspective()
 batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
 policy, value = net(batch)
-policy = mcts_net.policy_values(board, {}, net, 800, 1)
+policy = mcts_net.policy_values(board, {}, net, 500, 1)
+
+
+# # test quantization
+# network = networks.ResNet(Config.learning_rate, Config.n_blocks, Config.n_filters)
+# torch.quantization.quantize_dynamic(network, dtype=torch.qint8)
+
+
+
 
 board.from_position(50099824841353, 279245752885183)
 policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, 0)

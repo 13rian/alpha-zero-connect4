@@ -45,7 +45,7 @@ def mainTrain():
     for i in range(training_data.cycle, Config.cycle_count, 1):
         ###### self play and update: create some game data through self play
         logger.info("start playing games in cycle {}".format(i))
-        avg_moves_played = agent.play_self_play_games(training_data.network_path)
+        avg_moves_played = agent.play_self_play_games(training_data.network_path, i)
         training_data.avg_moves_played.append(avg_moves_played)
         print("average moves played: ", avg_moves_played)
 

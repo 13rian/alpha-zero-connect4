@@ -31,11 +31,11 @@ class Agent:
 
     # from utils import utils
     # @utils.profile
-    def play_self_play_games(self, network_path):
+    def play_self_play_games(self, network_path, generation):
         """
         plays some games against itself and adds the experience into the experience buffer
         :param network_path     the path of the current network
-        :param game_count:      the number of games to play
+        :param generation:      the network generation (number of iterations so far)
         :return:                the average nu,ber of moves played in a game
         """
 
@@ -53,6 +53,7 @@ class Agent:
                                                           [position_cache] * Globals.n_pool_processes,
                                                           [games_per_process] * Globals.n_pool_processes))
 
+
         # add the training examples to the experience buffer
         logger.info("start to prepare the training data")
         self.experience_buffer.add_new_cycle()
@@ -63,7 +64,7 @@ class Agent:
             # add the original data
             self.experience_buffer.add_data(sample)
 
-        self.experience_buffer.prepare_data(Config.window_size)
+        self.experience_buffer.prepare_data(generation)
 
         avg_game_length = tot_moves_played / Config.episode_count
         return avg_game_length
@@ -154,12 +155,31 @@ class ExperienceBuffer:
         self.training_cycles[-1] += training_examples
 
 
-    def prepare_data(self, window_size):
+    def window_size_from_generation(self, generation):
+        """
+        returns the size of the window that is used for training
+        :param generation:  the network generation
+        :return:            the size of the training window
+        """
+        if generation < 5:
+            return 4
+
+        window_size = 4 + (generation - 3) // 2
+        if window_size > Config.window_size:
+            window_size = Config.window_size
+
+        return window_size
+
+
+    def prepare_data(self, generation):
         """
         prepares the training data for training
-        :param window_size:     the size of the window (number of cycles)
+        :param generation:     the generation of the network (number of iterations so far)
         :return:
         """
+        # calculate the size of the window
+        window_size = self.window_size_from_generation(generation)
+        print("window_size: ", window_size)
 
         # get rid of old data
         while len(self.training_cycles) > window_size:
@@ -185,10 +205,10 @@ class ExperienceBuffer:
             self.policy[idx, :] = torch.Tensor(sample.get("policy"))
             self.value[idx, :] = sample.get("value")
 
-        # # copy everything to the training device
-        # self.state = self.state.to(Config.training_device)
-        # self.policy = self.policy.to(Config.training_device)
-        # self.value = self.value.to(Config.training_device)
+        # copy everything to the training device
+        self.state = self.state.to(Config.training_device)
+        self.policy = self.policy.to(Config.training_device)
+        self.value = self.value.to(Config.training_device)
 
 
     def __average_positions__(self, training_data):
