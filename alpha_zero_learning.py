@@ -4,6 +4,7 @@ import logging
 from operator import itemgetter
 
 import torch
+import random
 
 from game import connect4
 from globals import CONST, Config, Globals
@@ -249,6 +250,18 @@ class ExperienceBuffer:
                 value = position.get("value")
                 position_count = 1
 
+        # add the last example as well
+        if position_count > 1:
+            policy = np.divide(policy, np.sum(policy))  # normalize the policy
+
+            averaged_sample = {
+                "state_id": state_id,
+                "state": state,
+                "policy": policy,
+                "value": value / position_count
+            }
+            training_data_avg.append(averaged_sample)
+
         size_reduction = (len(training_data) - len(training_data_avg)) / len(training_data)
         logger.debug("size reduction due to position averaging: {}".format(size_reduction))
         return training_data_avg
@@ -306,6 +319,9 @@ def __self_play_worker__(network_path, position_cache, game_count):
     :param game_count:          the number of self-play games to play
     :return:                    a list of dictionaries with all training examples
     """
+    # set the random seed
+    random.seed(a=None, version=2)
+    np.random.seed(seed=None)
 
     # load the network
     net = data_storage.load_net(network_path, Config.evaluation_device)

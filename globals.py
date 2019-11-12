@@ -20,10 +20,10 @@ class Config:
 	training_device = torch.device('cuda') 		# the pytorch device that is used for training
 
 	# hyperparameters
-	cycle_count = 1000  	# the number of alpha zero cycles
+	cycle_count = 29  	# the number of alpha zero cycles
 	episode_count = 210  	# the number of games that are self-played in one cycle 2000
 	epoch_count = 2  		# the number of times all training examples are passed through the network 10
-	mcts_sim_count = 200  	# the number of simulations for the monte-carlo tree search 800
+	mcts_sim_count = 600  	# the number of simulations for the monte-carlo tree search 800
 	c_puct = 4 	 			# the higher this constant the more the mcts explores 4
 	temp = 1  				# the temperature, controls the policy value distribution
 	temp_threshold = 42  	# up to this move the temp will be temp, otherwise 0 (deterministic play)

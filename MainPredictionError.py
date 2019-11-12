@@ -24,7 +24,8 @@ c_puct = 4
 temp = 0
 mcts_sim_count = 200
 test_set_path = "test_set/positions.csv"
-network_dir = "networks/"           # directory in which the networks are saved
+network_dir = "networks/"                   # directory in which the networks are saved
+torch_device = torch.device('cuda')         # the torch device for the network evaluation
 
 print("pytorch version: ", torch.__version__)
 
@@ -37,44 +38,51 @@ def net_prediction_error(net, test_set):
     :param test_set:    the test set
     :return:            error percentage
     """
-
     tot_positions = test_set.shape[0]   # test_set.shape[0]   # the total number of positions in the test set
     correct_predictions = 0             # the correctly predicted positions in the test set
     tot_predictions = 0
 
+    batch_size = 512
+    batch_list = []
+    idx_list = []
     for j in range(tot_positions):      # tot_positions
-        # ignore losing and drawing positions
-        if test_set["weak_score"][j] <= 0:
+        # ignore losing positions
+        if test_set["weak_score"][j] < 0:
             continue
-
 
         # load the board
         board = connect4.BitBoard()
         board.from_position(test_set["position"][j], test_set["disk_mask"][j])
 
         # get the white perspective
-        batch, _ = board.white_perspective()
-        batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
+        sample, _ = board.white_perspective()
+        batch_list.append(sample)
+        idx_list.append(j)
 
-        # find the predicted move
-        policy, value = net(batch)
-        #print(value)
-        #print(policy)
-        _, move = policy.max(1)
-        move = move.item()
+        if len(batch_list) == batch_size or j == tot_positions - 1:
+            batch = torch.Tensor(batch_list).to(torch_device)
+            policy, value = net(batch)
 
-        # check if the move is part of the optimal moves
-        if str(move) in str(test_set["weak_moves"][j]):
-            correct_predictions += 1
-        # else:
-        #     print("pred: {} wrong pos".format(move))
-        #     print("v: ", value.item())
-        #     print("p: ", policy.squeeze().detach().numpy())
-        #     board.print()
-        #     print(" ")
+            for i_batch in range(policy.shape[0]):
+                _, move = policy[i_batch].max(0)
+                move = move.item()
 
+                # check if the move is part of the optimal moves
+                idx = idx_list[i_batch]
+                if str(move) in str(test_set["weak_moves"][idx]):
+                    correct_predictions += 1
+                # else:
+                #     print("pred: {} wrong pos".format(move))
+                #     print("v: ", value.item())
+                #     print("p: ", policy.squeeze().detach().numpy())
+                #     board.print()
+                #     print(" ")
 
-        tot_predictions += 1
+                tot_predictions += 1
+
+            batch_list = []
+            idx_list = []
+
 
     # calculate the prediction error
     pred_error = (tot_predictions - correct_predictions) / tot_predictions * 100
@@ -202,9 +210,8 @@ path_list.sort(key=utils.natural_keys)
 #
 
 
-
 net_path = network_dir + path_list[-1]
-net = data_storage.load_net(net_path, Config.evaluation_device)
+net = data_storage.load_net(net_path, torch_device)
 error = net_prediction_error(net, test_set)
 print("error: ", error, "network: ", net_path)
 
@@ -214,21 +221,22 @@ board = connect4.BitBoard()
 
 # empty board test
 batch, _ = board.white_perspective()
+batch = torch.Tensor(batch).unsqueeze(0).to(torch_device)
+policy, value = net(batch)
+print("empty board policy: ", policy)
+net = data_storage.load_net(net_path, Config.evaluation_device)
+policy = mcts_net.policy_values(board, {}, net, 800, 1)
+print("empty board mcts-policy: ", policy)
+
+
+
+net = data_storage.load_net(net_path, Config.evaluation_device)
+board.from_position(50099824841353, 279245752885183)
+batch, _ = board.white_perspective()
 batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
 policy, value = net(batch)
-policy = mcts_net.policy_values(board, {}, net, 500, 1)
-
-
-# # test quantization
-# network = networks.ResNet(Config.learning_rate, Config.n_blocks, Config.n_filters)
-# torch.quantization.quantize_dynamic(network, dtype=torch.qint8)
-
-
-
-
-board.from_position(50099824841353, 279245752885183)
 policy = mcts_net.policy_values(board, {}, net, mcts_sim_count, 0)
-move = np.where(policy == 1)[0][0]
+# move = np.where(policy == 1)[0][0]
 board.print()
 
 
@@ -237,7 +245,7 @@ board.print()
 for i in range(len(path_list)):
     generation.append(i)
     net_path = network_dir + path_list[i]
-    net = data_storage.load_net(net_path, Config.evaluation_device)
+    net = data_storage.load_net(net_path, torch_device)
 
     error = net_prediction_error(net, test_set)
     net_prediciton_error.append(error)
@@ -246,15 +254,15 @@ for i in range(len(path_list)):
 
 
 
-# get the mcts prediction error of all networks
-path_list = [path_list[-1]]
-for i in range(len(path_list)):
-    net_path = network_dir + path_list[i]
-    net = data_storage.load_net(net_path, Config.evaluation_device)
-
-    error = mcts_prediction_error(net, test_set, mcts_sim_count, temp)
-    mcts_prediciton_error.append(error)
-    print("mcts-error: ", error, "network: ", net_path)
+# # get the mcts prediction error of all networks
+# path_list = [path_list[-1]]
+# for i in range(len(path_list)):
+#     net_path = network_dir + path_list[i]
+#     net = data_storage.load_net(net_path, Config.evaluation_device)
+#
+#     error = mcts_prediction_error(net, test_set, mcts_sim_count, temp)
+#     mcts_prediciton_error.append(error)
+#     print("mcts-error: ", error, "network: ", net_path)
 
 
 
