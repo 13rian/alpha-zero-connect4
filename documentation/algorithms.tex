@@ -1,7 +1,7 @@
 \documentclass{article}
 \usepackage{amsmath}
 \usepackage[margin=1.0in]{geometry}
-\title{Reinforcement Learning Algorithms used in Tic Tac Toe}
+\title{Alpha Zero for Connect4}
 \begin{document}
 \maketitle
 
@@ -31,94 +31,55 @@ $P(s,a)$ probability to take action $a$ in state $s$ as predicted by the neural 
 $N(s,a)$ is the number of times we took action $a$ from state $s$ \\
 $\sum\nolimits_{b}N(s,b)$ is the total number of plays from state $s$ \\
 \\
+
+
+\subsubsection{Training Loss}
+\noindent 
+$l=(z-v)^2 - \pi^T $log$ p$ \\
+
+\noindent
+$z $ is the outcome of the game -1, 0, 1 for the current player \\
+$v $ is the value prediction of the value \\
+$\pi $ is the policy form the MCTS \\
+$p $ is the network prediction of the policy \\
+\\
 \pagebreak
 
 
-\subsubsection{Alpha Zero Tree Search}
-\textbf{procedure} SEARCH($s$) \\
-\indent \textbf{If} terminal($s_t$) \textbf{Then} \\
-\indent \indent \textbf{Return} $r_t$ \\
-\indent \textbf{End If} \\
-\\
-\indent \textbf{If not} exists($P(s, .)$) \textbf{Then} \\
-\indent \indent predict $P(s, .)$ and $v(s)$ with the neural network \\
-\indent \indent $N_s(s) = 0$ \\
-\indent \indent $Q(s, a) = 0$ for all $a$ \\
-\indent \indent $N(s, a) = 0$ for all $a$ \\
-\indent \indent \textbf{If} player == BLACK \textbf{Then} \\
-\indent \indent \indent \textbf{Return} $-v(s_{t})$ \\
-\indent \indent \textbf{Else} \\
-\indent \indent \indent \textbf{Return} $v(s_{t})$ \\
-\indent \indent \textbf{End If} \\
-\indent \textbf{End If} \\
-\\
-\indent $U(s,a) = Q(s,a) + c_{puct} P(s,a) \frac{\sqrt{N_s(s)}}{1 + N(s,a)}$ for all $a$ \\
-\indent $a_t = \text{argmax}_a U(s,a)$ \\
-\indent Execute $a_t$ to get next state $s_{t+1}$ \\
-\indent $v(s_{t+1}) = \text{SEARCH}(s_{t+1})$ \\
-\\
-\indent \textbf{If} player == BLACK \textbf{Then} \\
-\indent \indent $v' = -v(s_{t+1})$ \\
-\indent \textbf{Else} \\
-\indent \indent $v' = v(s_{t+1})$ \\
-\indent \textbf{End If} \\
-\\
-\indent \textbf{If} s it root node \\
-\indent \indent $P(s) = (1-\epsilon) P(s) + \epsilon \eta_d(\alpha)$ \\
-\indent \textbf{End If} \\
-\indent $Q(s,a) = \frac{N(s,a) Q(s,a) + v'}{N(s,a) + 1}$ \\
-\indent $N(s,a) = N(s,a) + 1$ \\
-\indent $N_s(s) = N_s(s) + 1$ \\
-\indent \textbf{Return} v \\
-\textbf{End procedure} \\
-\\
-\textbf{procedure} MCTSAZ($s$) \\
-\indent \textbf{For} simulation = 1, M \textbf{Do} \\
-\indent \indent SEARCH($s_t$) \\
-\indent \textbf{End} \\
-\indent \textbf{Return} $N(s,a)$\\
-\textbf{End procedure} \\
+\subsubsection{Alpha Zero Algorithm}
+\textbf{while} current iteration $<$ iterations \textbf{do} \\ 
+\indent \textbf{for} episode 1, M \textbf{do} \\
+\indent \indent \textbf{while} !game terminated \textbf{do} \\
+\indent \indent \indent \textbf{while} current simulation $<$ mctssimulations \textbf{do} \\ 
+\indent \indent \indent \indent \textbf{while} !$s$ leaf node \textbf{do} \\
+\indent \indent \indent \indent \indent \textbf{if} $s$ root node \textbf{then} \\
+\indent \indent \indent \indent \indent \indent $p(s) = (1-\epsilon) p(s) + \epsilon \eta_d(\alpha)$ \\
+\indent \indent \indent \indent \indent play move $a = $ argmax$_a \left( Q(a,s) + c_{puct} p(s,a) \frac{\sqrt{(N(s))}}{1 + N(s,a)} \right)$ \\
+\indent \indent \indent \indent \indent $N(s) \leftarrow N(s) + 1$ \\
+\indent \indent \indent \indent \textbf{if} $s$ terminal game state \textbf{then} \\
+\indent \indent \indent \indent \indent $v \leftarrow z$ \\
+\indent \indent \indent \indent \textbf{else} \\
+\indent \indent \indent \indent \indent evaluate s with the network to get $v(s) and p(s)$ \\
+\indent \indent \indent \indent \indent $v \leftarrow v(s)$ \\
+\indent \indent \indent \indent \indent \textbf{if} player BLACK \textbf{then} \\
+\indent \indent \indent \indent \indent \indent $v \leftarrow -v$ \\
+\indent \indent \indent \indent \textbf{for} all state-action pairs $(s,a)$ \textbf{do} \\
+\indent \indent \indent \indent \indent \textbf{if} player BLACK \textbf{then} \\
+\indent \indent \indent \indent \indent \indent $v \leftarrow -v$ \\
+\indent \indent \indent \indent \indent $Q(s,a) \leftarrow \frac{N(s,a) Q(s,a) + v}{N(s,a) + 1}$ \\
+\indent \indent \indent \indent \indent $N(s,a) \leftarrow N(s,a) + 1$ \\
+\indent \indent $p(s,a) = \left( \frac{N(s,a)}{N(s)} \right)^{1/\tau}$ \\
+\indent \indent sample from $p(s)$ to play next self-play move a \\
+\indent \indent add training example $(s, p(s), v')$ to experience buffer \\
+\indent \indent get the true outcome $z$ of the game \\
+\indent \indent \textbf{for} all training examples of game \textbf{do} \\
+\indent \indent \indent \textbf{if} player WHITE \textbf{then} \\
+\indent \indent \indent \indent $v' \leftarrow z$ \\
+\indent \indent \indent \textbf{else} \\
+\indent \indent \indent \indent $v' \leftarrow -z$ \\ 
+\indent train the neural network with the training examples from the experience buffer \\
 
 
 \pagebreak
-\subsubsection{Training Algorithm}
-\textbf{For} episode = 1, M \textbf{Do} \\
-\indent \textbf{For} t = 1, T \textbf{Do} \\
-\indent \indent Initialize $N_s$, $N$, $Q$, $U$ and $P$ \\
-\indent \indent Initialize a fresh game \\
-\indent \indent $N(s_t,a) = \text{MCTSAZ}(s)$ \\
-\indent \indent \textbf{If} $temp == 0$ \textbf{Then} \\
-\indent \indent \indent $a_t = \text{argmax}_a N(s_,a)$ \\
-\indent \indent \indent $P(s_t,a) = 
-\begin{cases}
-	1		& \text{for } a_t \\
-	0    	& \text{otherwise} \\
-\end{cases}
-$ \\
-\indent \indent \textbf{Else} \\
-\indent \indent \indent $P(s_t,a) = N(s,a)^{\frac{1}{temp}}$ \\
-\indent \indent \indent $P(s_t,a) = \frac{P(s,a)}{\sum\nolimits_{b}P(s_t,b)}$ \\
-\indent \indent \textbf{End If} \\
-\\
-\indent \indent Append the training example $(s_t, P(s_t,a), v_t)$ to $L$, where $v_t$ is arbitrary \\
-\indent \indent Pick action $a_t$ by sampling from $P(s_t,a)$ \\
-\indent \indent Play move $a_t$ \\
-\indent \textbf{End} \\
-\\
-\indent Observe the final reward $r_T$ of the game \\
-\indent \textbf{For} training example $(s_t, P(s_t,a), v_t) \in L$ \textbf{Do} \\
-\indent \indent \textbf{If} player == WHITE \textbf{Then} \\
-\indent \indent \indent Update $v_t \leftarrow r_T$ \\
-\indent \indent \textbf{Else} \\
-\indent \indent \indent Update $v_t \leftarrow -r_T$ \\
-\indent \indent \textbf{End If} \\
-\indent \textbf{End} \\
-\textbf{End} \\
-
-
-
-\pagebreak
-
-
 
 \end{document}
