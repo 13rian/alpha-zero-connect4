@@ -7,7 +7,7 @@ As a chess player Alpha Zero immediately fascinated me after I saw some games in
 
 
 ### Alpha Zero
-Alpha Zero a reinforcement learning algorithm for board games developed by Google DeepMind. The ideas presented below are taken from the original [paper](https://arxiv.org/abs/1712.01815). The following resources gave me a better understanding of the algorithm and a worth reading:  
+Alpha Zero is a reinforcement learning algorithm for board games developed by Google DeepMind. The ideas presented below are taken from the original [paper](https://arxiv.org/abs/1712.01815). The following resources gave me a better understanding of the algorithm and a worth reading:  
 - [Simple Alpha Zero](https://web.stanford.edu/~surag/posts/alphazero.html)  
 - [Lessons from Implementing Alpha Zero](https://medium.com/oracledevs/lessons-from-implementing-alphazero-7e36e9054191)  
 - [From-scratch implementation of AlphaZero for Connect4](https://towardsdatascience.com/from-scratch-implementation-of-alphazero-for-connect4-f73d4554002a)  
@@ -33,7 +33,7 @@ After the residual blocks the network splits into two heads, a policy and a valu
 ###### Training Loss 
 The loss is a combination of the value and the policy loss. For the value head the mean squared error is used and for the policy the cross entropy loss is used. The training loss is given by, 
 
-<img src="documentation/az_loss.png" alt="drawing" width="450"/>
+<img src="/documentation/az_loss.png" alt="drawing" width="450"/>
 
  
 
@@ -42,7 +42,7 @@ Monte-Carlo Tree Search is a heuristic search algorithm. The idea is to treat th
 
 One improvement is to use an upper confidence bound during the tree search given by,  
   
-<img src="documentation/mcts_ucb.png" alt="drawing" width="600"/>
+<img src="/documentation/mcts_ucb.png" alt="drawing" width="600"/>
 
 During the tree search you always pick the action with the highest upper confidence bound. This ensures a balance between exploration and exploitation. The upper confidence bound is high for nodes that have not been visited often or nodes that have a high expected reward. At the end of the simulation the action with the highest probability to win is picked (i. .e. the action with the largest Q(s,a)) and a new simulation is started. By increasing the constant c_puct, the exploration term becomes more important and actions that were not visited a lot have a high upper confidence bound and are therefore more likely to be chosen. If c_puct is small exploitation dominates (i. e. high expected values Q(s,a) are the most important). MCTS works in a way that good moves are visited more often and give a good indication of what moves should be played (see Training Algorithm). A more detailed explanation and some code examples can be found [here](https://jeffbradberry.com/posts/2015/09/intro-to-monte-carlo-tree-search/).  
 
@@ -53,7 +53,7 @@ Before presenting some pseudocode is is useful to gain some intuition how the tr
   
 AlphaZero improved the MCTS further by using a different version of the upper confidence bound called the polynomial upper confidence trees (PUCT):
 
-<img src="documentation/az_ucb.png" alt="drawing" width="600"/>
+<img src="/documentation/az_ucb.png" alt="drawing" width="600"/>
 
 The MCTS that is used by Alpha Zero uses the network to predict the probabilities of an action to play.
 
@@ -66,7 +66,7 @@ After training the network will be able to better predict the policy and the val
 
 The complete AlphaZero algorithm used in this project is described below.
 
-<img src="documentation/az_algo.png" alt="drawing" width="600"/>
+<img src="/documentation/az_algo.png" alt="drawing" width="600"/>
 
 
 
@@ -98,8 +98,8 @@ This defines how many games are played before the network is updated. Here a rel
 ###### Learning rate and batch size
 As always in deep learning picking the right learning rate and batch size for training is critical. DeepMind used stochastic gradient decent to train the deep network. They started with a relatively high learning rate and decreased it several times during training. Here the Adam optimizer was used instead of stochastic gradient decent. Following the strategy described in this [paper](https://arxiv.org/abs/1506.01186) the learning rate for cyclical learning and normal learning was found by the learning rate test. The idea is to train the network for several epochs (here 8) and check the accuracy after training. This is done for a fixed batch size and multiple learning rates. The network does not learn fast enough if the learning rate is too low. If the learning rate is too large learning will not be stable and the network is not able to learn something. Below are the results for the value and the policy head for different learning rates and a batch size of 256. 
 
-<img src="results/adam_p_256.png" alt="drawing" width="570"/> 
-<img src="results/adam_v_256.png" alt="drawing" width="570"/>
+<img src="/results/adam_p_256.png" alt="drawing" width="570"/> 
+<img src="/results/adam_v_256.png" alt="drawing" width="570"/>
 
 The plots above would suggest a minimal learning rate of 10-5 and a maximal learning rate of 10-4. For training a fixed learning rate of 10-4 was chosen although 10-3 also worked pretty well. For cyclical learning the minimal learning rate was set to 10-5 and the maximal learning rate to 10-4. A triangular learning rate schedule was chosen that restarts in every epoch.
 
