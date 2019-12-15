@@ -1,10 +1,9 @@
 import torch
 import numpy as np
 
-from globals import Config
 from game import connect4
-import mcts_non_rec
-from mcts_non_rec import MCTS
+import mcts
+from mcts import MCTS
 
 
 torch_device = torch.device('cuda')         # the torch device for the network evaluation
@@ -109,7 +108,7 @@ def mcts_prediction_error(net, test_set, mcts_sim_count, alpha_dirich, temp):
 
         if len(mcts_list) == batch_size or j == tot_positions - 1:
             # =========================================== execute the mcts simulations for all boards
-            mcts_non_rec.run_simulations(mcts_list, mcts_sim_count, net, alpha_dirich)
+            mcts.run_simulations(mcts_list, mcts_sim_count, net, alpha_dirich)
 
             # ===========================================  get the policy from the mcts
             for i_mcts_ctx, mcts_ctx in enumerate(mcts_list):

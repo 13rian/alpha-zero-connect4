@@ -9,8 +9,8 @@ import numpy as np
 
 from game import connect4
 from globals import CONST, Config
-import mcts_non_rec
-from mcts_non_rec import MCTS
+import mcts
+from mcts import MCTS
 import data_storage
 
 
@@ -331,7 +331,7 @@ def __self_play_worker__(network_path, game_count):
 
 
         # =========================================== execute the mcts simulations for all boards
-        mcts_non_rec.run_simulations(mcts_list, Config.mcts_sim_count, net, Config.alpha_dirich)
+        mcts.run_simulations(mcts_list, Config.mcts_sim_count, net, Config.alpha_dirich)
 
 
         # ===========================================  get the policy from the mcts

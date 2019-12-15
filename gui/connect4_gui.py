@@ -5,7 +5,7 @@ import pygame
 
 from globals import CONST
 from game import connect4
-import mcts_non_rec
+import mcts
 
 # logger
 logger = logging.getLogger('Gui')
@@ -155,7 +155,7 @@ class GUI:
         calculates the network policy with mcts
         :return:
         """
-        policy = mcts_non_rec.mcts_policy(self.board, 200, self.network, 1, 0)
+        policy = mcts.mcts_policy(self.board, 200, self.network, 1, 0)
         logger.info("network policy: ")
         print(policy)
         print(" ")

@@ -11,7 +11,7 @@ from utils import utils
 from game import connect4
 from globals import Config
 import data_storage
-import mcts_non_rec
+import mcts
 import evaluation
 
 
@@ -68,7 +68,7 @@ batch = torch.Tensor(batch).unsqueeze(0).to(evaluation.torch_device)
 policy, value = net(batch)
 logger.debug("empty board policy:      {}".format(policy.detach().cpu().squeeze().numpy()))
 net = data_storage.load_net(net_path, Config.evaluation_device)
-policy = mcts_non_rec.mcts_policy(board, 800, net, 1, 0)
+policy = mcts.mcts_policy(board, 800, net, 1, 0)
 logger.debug("empty board mcts-policy: {}".format(policy))
 
 

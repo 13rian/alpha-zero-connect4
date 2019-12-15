@@ -1,53 +1,39 @@
 import math
 
-import numpy as np
 import torch
+import numpy as np
 
 from globals import CONST, Config
+from game import connect4
 
 
 class MCTS:
-    """
-    handles the monte-carlo tree search
-    """
-    
-    def __init__(self, c_puct):
-        self.c_puct = c_puct        # a tuneable hyperparameter. The larger this number, the more the model explores
-        
+    def __init__(self, board=None):
+        # defines the board with the current games state
+        if board is None:
+            self.board = connect4.BitBoard()
+        else:
+            self.board = board
+
         self.P = {}                 # holds the policies for a game state, key: s, value: policy
         self.Q = {}                 # action value, key; (s,a)
         self.N_s = {}               # number of times the state s was visited, key: s
         self.N_sa = {}              # number of times action a was chosen in state s, key: (s,a)
-        
-        
-    
-    def policy_values(self, board, position_cache, net, mc_sim_count, temp, alpha_dirich=0):
-        """
-        executes mc_sim_count number of monte-carlo simulations to obtain the probability
-        vector of the current game position
-        :param board:            the game board
-        :param position_cache:   holds positions already evaluated by the network
-        :param net:              neural network that approximates the policy and the value
-        :param mc_sim_count:     number of monte-carlo simulations to perform
-        :param temp:             the temperature, determines the degree of exploration
-                                 temp = 0 means that we only pick the best move
-                                 temp = 1 means that we pick the move proportional to the count the state was visited
-        :param alpha_dirich:     alpha parameter for the dirichlet noise that is added to the root node probabilities
-        :return:                 policy where the probability of an action is proportional to 
-                                 N_sa**(1/temp)
-        """
 
-        # perform the tree search
-        for sim in range(mc_sim_count):
-            sim_board = board.clone()
-            self.tree_search(sim_board, position_cache, net, alpha_dirich)
-            # print("sim: ", sim)
-            # print("Q: ", self.Q)
-            # print("N_s", self.N_s)
-            # print("N_sa", self.N_sa)
-            # print(" ")
+        # lists for one simulation
+        self.states = []
+        self.players = []
+        self.actions = []
 
-        s = board.state_id()
+
+    def policy_from_state(self, s, temp):
+        """
+        returns the policy of the passed state id. it only makes sense to call this methods if a few
+        monte carlo simulations were executed previously.
+        :param s:       state id of the board
+        :param temp:    the temperature
+        :return:        vector containing the policy value for the moves
+        """
         counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in range(CONST.BOARD_WIDTH)]
 
         # in order to learn something set the probabilities of the best action to 1 and all other action to 0
@@ -63,112 +49,176 @@ class MCTS:
             return np.array(probs)
 
 
-
-    def tree_search(self, board, position_cache, net, alpha_dirich=0):
+    def exec_simulation(self, board, alpha_dirich=0):
         """
-        Performs one iteration of the monte-carlo tree search.
-        The method is recursively called until a leaf node is found. This is a game
-        state from which no simulation (playout) has yet been initiated. If the leaf note
-        is a terminal state, the reward is returned. If the leaf node is not a terminal node
-        the value is estimated with the neural network. 
-        The move (action) with the highest upper confidence bound is chosen. The fewer a move was
-        chosen in a certain position the higher his upper confidence bound.
-        
-        The method returns the estimated value of the current game state. The sign of the value
-        is flipped because the value of the game for the other player is the negative value of
-        the state of the current player
+        executes one Monte-Carlo Tree search simulation. the simulation always starts a the rootk node and ends
+        when a leaf node is reached. this is a game state from which no simulation (playout) was started so far.
+        if the leaf node is a terminal state, the reward is returned. if the leaf node is not a terminal node
+        the value and the policy are estimated with the neural network. the value is the result of the simulation.
+        if a node is reached with known value and policy the move (action) with the highest upper confidence bound
+        is chosen. the upper confidence bound increases with larger probability and if the moves was not chose often
+        in previous simulation. the upper confidence bound holds the balance between exploreation and exploitation.
         :param board:           represents the game
-        :param position_cache:  holds positions already evaluated by the network
-        :param net:             neural network that approximates the policy and the value
         :param alpha_dirich:    alpha parameter for the dirichlet noise that is added to the root node probabilities
-        :return:                the true value of the position
+        :return:                the board if it needs to be analyzed  by the network or None if the simulation
+                                completed
         """
+        self.states.clear()
+        self.players.clear()
+        self.actions.clear()
+        while True:
+            s = board.state_id()
+            self.states.append(s)
+            player = board.player
+            self.players.append(player)
 
-        # check if the game is terminal    
-        if board.terminal:
-            return board.training_reward()
+            # check if we are on a leaf node (state form which no simulation was played so far)
+            if s not in self.P:
+                # return the board for the network evaluation
+                return board
 
-        # check if we are on a leaf node (state form which no simulation was played so far)
-        s = board.state_id()
-        player = board.player
-        if s not in self.P:
-            # check if the position is in the position cache
-            if s in position_cache:
-                net_values = position_cache[s]
-                self.P[s] = net_values[0]
-                v = net_values[1]
+            # add dirichlet noise to the root node
+            legal_moves = board.legal_moves()
+            p_s = self.P[s]
+            if alpha_dirich > 0:
+                p_s = np.copy(p_s)
+                alpha_params = alpha_dirich * np.ones(len(legal_moves))
+                dirichlet_noise = np.random.dirichlet(alpha_params)
+                p_s[legal_moves] = 0.75 * p_s[legal_moves] + 0.25 * dirichlet_noise
+
+                # normalize the probabilities again
+                p_s /= np.sum(p_s)
+
+                # set the dirichlet noise to 0 in order to only add it to the root node
+                alpha_dirich = 0
+
+            # choose the action with the highest upper confidence bound
+            max_ucb = -float("inf")
+            action = -1
+            for a in legal_moves:
+                if (s, a) in self.Q:
+                    u = self.Q[(s, a)] + Config.c_puct * p_s[a] * math.sqrt(self.N_s[s]) / (1 + self.N_sa[(s, a)])
+                else:
+                    u = Config.c_puct * p_s[a] * math.sqrt(self.N_s[s] + 1e-8)  # avoid division by 0
+
+                if u > max_ucb:
+                    max_ucb = u
+                    action = a
+
+            self.N_s[s] += 1
+            self.actions.append(action)
+            board = board.clone()
+            board.play_move(action)
+
+            # check if the game is terminal
+            if board.terminal:
+                v = board.training_reward()
+                self.finish_simulation(board, v)
+                return None
+
+
+    def finish_simulation(self, board, value_white, policy=None):
+        """
+        ends one monte-carlo simulation with the terminal game value of the network evaluation
+        :param board:           the board
+        :param value_white:     the simulated value from the white perspective
+        :param policy:          the policy if the simulation requires network inference
+        :return:
+        """
+        if policy is not None:
+            s = board.state_id()
+            self.P[s] = policy
+
+            # ensure that the summed probability of all valid moves is 1
+            self.P[s][board.illegal_moves()] = 0
+            total_prob = np.sum(self.P[s])
+            if total_prob > 0:
+                self.P[s] /= total_prob  # normalize the probabilities
 
             else:
-                batch, _ = board.white_perspective()
-                batch = torch.Tensor(batch).unsqueeze(0).to(Config.evaluation_device)
-                self.P[s], v = net(batch)
-                self.P[s] = self.P[s].detach().squeeze().cpu().numpy()
-                v = v.item()
-                # v = random.uniform(0, 1) * 2 - 1
-
-                # ensure that the summed probability of all valid moves is 1
-                legal_moves = np.array(board.legal_moves())
-                legal_move_indices = np.zeros(CONST.BOARD_WIDTH)
-                legal_move_indices[legal_moves] = 1
-                self.P[s] = self.P[s] * legal_move_indices
-                total_prob = np.sum(self.P[s])
-                if total_prob > 0:
-                    self.P[s] /= total_prob  # normalize the probabilities
-
-                else:
-                    # the network did not choose any legal move, make all moves equally probable
-                    print("warning: total probabilities estimated by the network for all legal moves is smaller than 0")
-                    self.P[s][legal_moves] = 1 / len(legal_moves)
-
-                # add the position to the position cache, the value from the network is always from the current player
-                if board.player == CONST.BLACK:
-                    v = -v
-                position_cache[s] = (self.P[s], v)
+                # the network did not choose any legal move, make all moves equally probable
+                print("warning: network probabilities for all legal moves are 0, choose a equal distribution")
+                legal_moves = board.legal_moves()
+                self.P[s][legal_moves] = 1 / len(legal_moves)
 
             self.N_s[s] = 0
-            return v
 
-        # add dirichlet noise to the root node
-        legal_moves = board.legal_moves()
-        p_s = self.P[s]
-        if alpha_dirich > 0:
-            p_s = np.copy(p_s)
-            alpha_params = alpha_dirich * np.ones(len(legal_moves))
-            dirichlet_noise = np.random.dirichlet(alpha_params)
-            p_s[legal_moves] = 0.75 * p_s[legal_moves] + 0.25 * dirichlet_noise
 
-            # normalize the probabilities again
-            total_prob = np.sum(p_s)
-            p_s /= total_prob
+        # back up the tree by updating the Q and the N values
+        for i in range(len(self.actions)):
+            # flip the value for the black player since the game is always viewed from the white perspective
+            v_true = value_white if self.players[i] == CONST.WHITE else -value_white
 
-        # choose the action with the highest upper confidence bound
-        max_ucb = -float("inf")
-        action = -1
-        for a in legal_moves:
+            s = self.states[i]
+            a = self.actions[i]
             if (s, a) in self.Q:
-                u = self.Q[(s, a)] + self.c_puct * p_s[a] * math.sqrt(self.N_s[s]) / (1 + self.N_sa[(s, a)])
+                self.Q[(s, a)] = (self.N_sa[(s, a)] * self.Q[(s, a)] + v_true) / (self.N_sa[(s, a)] + 1)
+                self.N_sa[(s, a)] += 1
             else:
-                u = self.c_puct * p_s[a] * math.sqrt(self.N_s[s] + 1e-8)  # avoid division by 0
+                self.Q[(s, a)] = v_true
+                self.N_sa[(s, a)] = 1
 
-            if u > max_ucb:
-                max_ucb = u
-                action = a
 
-        a = action
-        board.play_move(a)
-        v = self.tree_search(board, position_cache, net)
 
-        # update the Q and N values
-        v_true = v
-        if player == CONST.BLACK:
-            v_true *= -1  # flip the value for the black player since the game is always viewed from the white perspective
+def run_simulations(mcts_list, mcts_sim_count, net, alpha_dirich):
+    """
+    runs a bunch of mcts simulations in parallel
+    :param mcts_list:           list containing all the mcts objects
+    :param mcts_sim_count:      the number of mcts simulations to perform
+    :param net:                 the network that is used for evaluation
+    :param alpha_dirich:        the dirichlet parameter alpha
+    :return:
+    """
+    batch_list = []
+    leaf_board_list = len(mcts_list) * [None]
 
-        if (s, a) in self.Q:
-            self.Q[(s, a)] = (self.N_sa[(s, a)] * self.Q[(s, a)] + v_true) / (self.N_sa[(s, a)] + 1)
-            self.N_sa[(s, a)] += 1
-        else:
-            self.Q[(s, a)] = v_true
-            self.N_sa[(s, a)] = 1
+    for sim in range(mcts_sim_count):
+        batch_list.clear()
+        for i_mcts_ctx, mcts_ctx in enumerate(mcts_list):
+            # skip finished games
+            if mcts_ctx.board.terminal:
+                leaf_board_list[i_mcts_ctx] = None
+                continue
 
-        self.N_s[s] += 1
-        return v
+            # execute one simulation
+            leaf_board = mcts_list[i_mcts_ctx].exec_simulation(mcts_ctx.board, alpha_dirich)
+            leaf_board_list[i_mcts_ctx] = leaf_board
+
+            if leaf_board is not None:
+                batch, _ = leaf_board.white_perspective()
+                batch_list.append(batch)
+
+        # pass all samples through the network
+        if len(batch_list) > 0:
+            batch_bundle = torch.Tensor(batch_list).to(Config.evaluation_device)
+            policy, value = net(batch_bundle)
+            policy = policy.detach().cpu().numpy()
+
+        # finish the simulation of the states that need a result from the network
+        i_sample = 0
+        for i_mcts_ctx in range(len(mcts_list)):
+            leaf_board = leaf_board_list[i_mcts_ctx]
+            if leaf_board is not None:
+                # get the value from the white perspective
+                value_white = value[i_sample].item() if leaf_board.player == CONST.WHITE else -value[i_sample].item()
+
+                # finish the simulation with the simulation with the network evaluation
+                mcts_list[i_mcts_ctx].finish_simulation(leaf_board, value_white, policy[i_sample])
+                i_sample += 1
+
+
+def mcts_policy(board, mcts_sim_count, net, temp, alpha_dirich):
+    """
+    calculates the mcts policy for one board state
+    :param board:               the board of which the policy should be calculated
+    :param mcts_sim_count:      the number of mcts simulations
+    :param net:                 the network
+    :param temp:                the temperature
+    :param alpha_dirich:        the dirichlet parameter alpha
+    :return:                    policy vector for all next moves
+    """
+
+    mcts_list = [MCTS(board)]
+    run_simulations(mcts_list, mcts_sim_count, net, alpha_dirich)
+    policy = mcts_list[0].policy_from_state(mcts_list[0].board.state_id(), temp)
+    return policy
