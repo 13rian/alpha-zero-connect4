@@ -7,7 +7,7 @@ import torch
 
 from globals import Config
 
-logger = logging.getLogger('TrainingData')
+logger = logging.getLogger('data_storage')
 storage_path = "training_data.pkl"
 network_dir = "networks"
 temp_dir = "temp_net"
@@ -86,6 +86,7 @@ def net_to_device(net, device):
     :param device:  the device to which the network is sent
     :return:
     """
+
     net_path = "{}/temp_net.pt".format(temp_dir)
 
     # ensure that the temp dir exists and is empty and
@@ -129,4 +130,3 @@ def load_net(net_path, device):
     if device.type == "cpu":
         cpu_net = torch.load(net_path, map_location='cpu')
         return cpu_net
-

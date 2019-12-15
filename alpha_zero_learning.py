@@ -1,19 +1,20 @@
-from multiprocessing import Manager
-import numpy as np
+import random
 import logging
+import pickle
 from operator import itemgetter
 
 import torch
-import random
+from torch.utils import data
+import numpy as np
 
 from game import connect4
-from globals import CONST, Config, Globals
-from game import tournament
-from mcts import MCTS
+from globals import CONST, Config
+import mcts_non_rec
+from mcts_non_rec import MCTS
 import data_storage
 
-logger = logging.getLogger('Connect4')
 
+logger = logging.getLogger('az_learning')
 
 
 class Agent:
@@ -22,81 +23,68 @@ class Agent:
         :param network:       alpha zero network that is used for training and evaluation
         """
 
-        self.network = network                        # the network
-        self.experience_buffer = ExperienceBuffer()   # buffer that saves all experiences
+        self.network = network                                  # the network
+        self.experience_buffer = ExperienceBuffer()             # buffer that saves all experiences
 
         # activate the evaluation mode of the networks
         self.network = data_storage.net_to_device(self.network, Config.evaluation_device)
         self.network.eval()
 
 
-    # from utils import utils
-    # @utils.profile
-    def play_self_play_games(self, network_path, generation):
+    def play_self_play_games(self, network_path):
         """
         plays some games against itself and adds the experience into the experience buffer
         :param network_path     the path of the current network
-        :param generation:      the network generation (number of iterations so far)
         :return:                the average nu,ber of moves played in a game
         """
-
-        if Globals.pool is None:
-            position_cache = {}
-            self_play_results = [__self_play_worker__(network_path, position_cache, Config.episode_count)]
-        else:
-            # create the shared dict for the position cache
-            manager = Manager()
-            position_cache = manager.dict()
-
-            games_per_process = int(Config.episode_count / Globals.n_pool_processes)
-            self_play_results = Globals.pool.starmap(__self_play_worker__,
-                                                      zip([network_path] * Globals.n_pool_processes,
-                                                          [position_cache] * Globals.n_pool_processes,
-                                                          [games_per_process] * Globals.n_pool_processes))
+        # execute the self-play
+        self_play_results = __self_play_worker__(network_path, Config.episode_count)
 
 
         # add the training examples to the experience buffer
-        logger.info("start to prepare the training data")
         self.experience_buffer.add_new_cycle()
-        tot_moves_played = 0
-        for sample in self_play_results:
-            tot_moves_played += len(sample) / 2            # divide by two as symmetric positions were added
-
-            # add the original data
-            self.experience_buffer.add_data(sample)
-
-        self.experience_buffer.prepare_data(generation)
+        tot_moves_played = len(self_play_results) / 2            # divide by two as symmetric positions were added
+        self.experience_buffer.add_data(self_play_results)
 
         avg_game_length = tot_moves_played / Config.episode_count
         return avg_game_length
 
 
-    def nn_update(self):
+    def nn_update(self, generation):
         """
         updates the neural network by picking a random batch form the experience replay
+        :param generation:      the network generation (number of iterations so far)
         :return:                average policy and value loss over all mini batches
         """
+        # setup the data set
+        training_generator = self.experience_buffer.prepare_data(generation)
+        step_size = training_generator.dataset.__len__() // (2 * Config.batch_size)
+        logger.info("training data prepared, step size: {}".format(step_size))
+
 
         # activate the training mode
         self.network = data_storage.net_to_device(self.network, Config.training_device)
+        if Config.cyclic_learning:
+            self.network.update_scheduler(step_size)  # update the scheduler
         self.network.train()
 
         avg_loss_p = 0
         avg_loss_v = 0
         tot_batch_count = 0
         for epoch in range(Config.epoch_count):
-            # shuffle all training examples
-            num_training_examples = self.experience_buffer.data_size - (self.experience_buffer.data_size % Config.batch_size)
-            states, policies, values = self.experience_buffer.random_batch(num_training_examples)
+            # training
+            for state_batch, value_batch, policy_batch in training_generator:
+                # send the data to the gpu
+                state_batch = state_batch.to(Config.training_device, dtype=torch.float)
+                value_batch = value_batch.unsqueeze(1).to(Config.training_device, dtype=torch.float)
+                policy_batch = policy_batch.to(Config.training_device, dtype=torch.float)
 
-            # train the network with all training examples
-            num_batches = int(num_training_examples / Config.batch_size)
-            for batch_num in range(num_batches):
-                start_batch = batch_num * Config.batch_size
-                end_batch = (batch_num+1) * Config.batch_size
-                loss_p, loss_v = self.network.train_step(states[start_batch:end_batch],
-                                                         policies[start_batch:end_batch],
-                                                         values[start_batch:end_batch])
+                # execute the training step with one batch
+                if Config.cyclic_learning:
+                    loss_p, loss_v = self.network.train_cyclical_step(state_batch, policy_batch, value_batch)
+                else:
+                    loss_p, loss_v = self.network.train_step(state_batch, policy_batch, value_batch)
+
                 avg_loss_p += loss_p
                 avg_loss_v += loss_v
                 tot_batch_count += 1
@@ -111,20 +99,29 @@ class Agent:
 
         return avg_loss_p.item(), avg_loss_v.item()
 
-    
-    
-    def play_against_random(self, color, game_count):
+
+class SelfPlayDataSet(data.Dataset):
+    def __init__(self, training_data):
         """
-        lets the agent play against a random player
-        :param color:           the color of the agent
-        :param game_count:      the number of games that are played
-        :return:                the mean score against the random player 0: lose, 0.5 draw, 1: win
+        data set for the neural network training
+        :param training_data:      list of dicts with state, value and policy
+        """
+        self.training_data = training_data
+
+
+    def __len__(self):
+        return len(self.training_data)
+
+
+    def __getitem__(self, index):
+        """
+        returns a sample with the passed index
+        :param index:   index of the sample
+        :return:        state, value, policy
         """
 
-        az_player = tournament.AlphaZeroPlayer(self.network, Config.c_puct, Config.mcts_sim_count, 0)
-        random_player = tournament.RandomPlayer()
-        score = tournament.play_one_color(game_count, az_player, color, random_player)
-        return score
+        return self.training_data[index].get("state"), self.training_data[index].get("value"), self.training_data[index].get("policy")
+
 
 
 class ExperienceBuffer:
@@ -136,6 +133,26 @@ class ExperienceBuffer:
         self.state = None
         self.policy = None
         self.value = None
+
+
+    def fill_with_initial_data(self):
+        """
+        fills the experience buffer with initial training data from an untrained network
+        this helps to prevents early overfitting of the network
+        :return:
+        """
+
+        with open("initial_training_data.pkl", 'rb') as input:
+            initial_data = pickle.load(input)
+
+        for i in range(Config.min_window_size):
+            self.add_new_cycle()
+
+            start_idx = i*Config.episode_count*Config.initial_game_length
+            end_idx = (i+1)*Config.episode_count*Config.initial_game_length
+            data = initial_data[start_idx:end_idx]
+            self.add_data(data)
+
 
 
     def add_new_cycle(self):
@@ -162,25 +179,33 @@ class ExperienceBuffer:
         :param generation:  the network generation
         :return:            the size of the training window
         """
-        if generation < 5:
-            return 4
+        # some initilal data is used
+        if Config.use_initial_data:
+            window_size = Config.min_window_size + generation // 2
+            if window_size > Config.max_window_size:
+                window_size = Config.max_window_size
 
-        window_size = 4 + (generation - 3) // 2
-        if window_size > Config.window_size:
-            window_size = Config.window_size
+            return window_size
+
+        # no initial data is used
+        window_size = max(Config.min_window_size + (generation - Config.min_window_size + 1) // 2, Config.min_window_size)
+        if window_size > Config.max_window_size:
+            window_size = Config.max_window_size
 
         return window_size
+
+
 
 
     def prepare_data(self, generation):
         """
         prepares the training data for training
-        :param generation:     the generation of the network (number of iterations so far)
-        :return:
+        :param generation:      the generation of the network (number of iterations so far)
+        :return:                torch training generator for training
         """
         # calculate the size of the window
         window_size = self.window_size_from_generation(generation)
-        print("window_size: ", window_size)
+        logger.debug("window_size: {}".format(window_size))
 
         # get rid of old data
         while len(self.training_cycles) > window_size:
@@ -192,24 +217,15 @@ class ExperienceBuffer:
             training_data += sample
 
         # average the positions (early positions are overrepresented)
-        training_data = self.__average_positions__(training_data)
+        if Config.average_positions:
+            training_data = self.__average_positions__(training_data)
 
 
-        # prepare the training data
-        self.data_size = len(training_data)
-        self.state = torch.empty(self.data_size, 2, CONST.BOARD_HEIGHT, CONST.BOARD_WIDTH)
-        self.policy = torch.empty(self.data_size, CONST.BOARD_WIDTH).to(Config.evaluation_device)
-        self.value = torch.empty(self.data_size, 1)
 
-        for idx, sample in enumerate(training_data):
-            self.state[idx, :] = torch.Tensor(sample.get("state"))
-            self.policy[idx, :] = torch.Tensor(sample.get("policy"))
-            self.value[idx, :] = sample.get("value")
-
-        # copy everything to the training device
-        self.state = self.state.to(Config.training_device)
-        self.policy = self.policy.to(Config.training_device)
-        self.value = self.value.to(Config.training_device)
+        # create the training set
+        training_set = SelfPlayDataSet(training_data)
+        training_generator = data.DataLoader(training_set, **Config.data_set_params)
+        return training_generator
 
 
     def __average_positions__(self, training_data):
@@ -267,135 +283,106 @@ class ExperienceBuffer:
         return training_data_avg
 
 
-    def random_batch(self, batch_size):
-        """
-        returns a random batch of the experience buffer
-        :param batch_size:   the size of the batch
-        :return:             state, policy, value
-        """
-        sample_size = batch_size if self.data_size > batch_size else self.data_size
-        idx = np.random.choice(self.data_size, sample_size, replace=False)
-        return self.state[idx, :], self.policy[idx, :], self.value[idx]
-
-
-def net_vs_net_mcts(net1, net2, game_count, mcts_sim_count, c_puct, temp):
-    """
-    lets two alpha zero networks play against each other using the network and mcts
-    :param net1:            net for player 1
-    :param net2:            net for player 2
-    :param game_count:      total games to play
-    :param mcts_sim_count   number of monte carlo simulations
-    :param c_puct           constant that controls the exploration
-    :param temp             the temperature
-    :return:                score of network1
-    """
-
-    az_player1 = tournament.AlphaZeroPlayerMcts(net1, c_puct, mcts_sim_count, temp)
-    az_player2 = tournament.AlphaZeroPlayerMcts(net2, c_puct, mcts_sim_count, temp)
-    score1 = tournament.play_match(game_count, az_player1, az_player2)
-    return score1
-
-
-def net_vs_net(net1, net2, game_count):
-    """
-    lets two alpha zero networks play against each other using only the network policy without mcts
-    :param net1:            net for player 1
-    :param net2:            net for player 2
-    :param game_count:      total games to play
-    :return:                score of network1
-    """
-
-    az_player1 = tournament.AlphaZeroPlayer(net1)
-    az_player2 = tournament.AlphaZeroPlayer(net2)
-    score1 = tournament.play_match(game_count, az_player1, az_player2)
-    return score1
-
-
-def __self_play_worker__(network_path, position_cache, game_count):
+def __self_play_worker__(network_path, game_count):
     """
     plays a number of self play games
     :param network_path:        path of the network
-    :param position_cache:      holds positions already evaluated by the network
     :param game_count:          the number of self-play games to play
     :return:                    a list of dictionaries with all training examples
     """
-    # set the random seed
-    random.seed(a=None, version=2)
-    np.random.seed(seed=None)
-
     # load the network
     net = data_storage.load_net(network_path, Config.evaluation_device)
 
     training_expl_list = []
-    # q_list = []
-    # position_cache = {}   # give each simulation its own state dict
-    # position_count_dict = {}
 
-    for i in range(game_count):
-        board = connect4.BitBoard()
-        mcts = MCTS(Config.c_puct)  # reset the search tree
+    # initialize the mcts object for all games
+    mcts_list = [MCTS() for _ in range(game_count)]
 
-        # reset the lists
-        player_list = []
-        state_list = []
-        state_id_list = []
-        policy_list = []
+    # initialize the lists that keep track of the game
+    player_list = [[] for _ in range(game_count)]
+    state_list = [[] for _ in range(game_count)]
+    state_id_list = [[] for _ in range(game_count)]
+    policy_list = [[] for _ in range(game_count)]
 
-        move_count = 0
-        while not board.terminal:
+
+    move_count = 0
+    all_terminated = False
+    while not all_terminated:
+        # ===========================================  append the correct values to the lists for the training data
+        for i_mcts_ctx, mcts_ctx in enumerate(mcts_list):
+            # skip terminated games
+            if mcts_ctx.board.terminal:
+                continue
+
             # add regular board
-            state, player = board.white_perspective()
-            state_id = board.state_id()
-            state_list.append(state)
-            state_id_list.append(state_id)
-            player_list.append(player)
+            state, player = mcts_ctx.board.white_perspective()
+            state_id = mcts_ctx.board.state_id()
+            state_list[i_mcts_ctx].append(state)
+            state_id_list[i_mcts_ctx].append(state_id)
+            player_list[i_mcts_ctx].append(player)
 
             # add mirrored board
-            board_mirrored = board.mirror()
+            board_mirrored = mcts_ctx.board.mirror()
             state_m, player_m = board_mirrored.white_perspective()
             state_id_m = board_mirrored.state_id()
-            state_list.append(state_m)
-            state_id_list.append(state_id_m)
-            player_list.append(player_m)
+            state_list[i_mcts_ctx].append(state_m)
+            state_id_list[i_mcts_ctx].append(state_id_m)
+            player_list[i_mcts_ctx].append(player_m)
 
-            # get the policy from the mcts
-            temp = 0 if move_count >= Config.temp_threshold else Config.temp
-            policy = mcts.policy_values(board, position_cache, net, Config.mcts_sim_count, temp, Config.alpha_dirich)
-            policy_list.append(policy)
-            # s = board.state_id()
+
+        # =========================================== execute the mcts simulations for all boards
+        mcts_non_rec.run_simulations(mcts_list, Config.mcts_sim_count, net, Config.alpha_dirich)
+
+
+        # ===========================================  get the policy from the mcts
+        temp = 0 if move_count >= Config.temp_threshold else Config.temp
+
+        for i_mcts_ctx, mcts_ctx in enumerate(mcts_list):
+            # skip terminated games
+            if mcts_ctx.board.terminal:
+                continue
+
+            policy = mcts_list[i_mcts_ctx].policy_from_state(mcts_ctx.board.state_id(), temp)
+            policy_list[i_mcts_ctx].append(policy)
 
             # add the mirrored policy as well
             policy_m = np.flip(policy)
-            policy_list.append(policy_m)
+            policy_list[i_mcts_ctx].append(policy_m)
 
             # sample from the policy to determine the move to play
             move = np.random.choice(len(policy), p=policy)
-            # q_value = mcts.Q.get((s, move), 0)
-            board.play_move(move)
+            mcts_ctx.board.play_move(move)
 
-            # save the training example
-            # q_list.append(q_value)
-            move_count += 1
+        move_count += 1
 
-        # calculate the values from the perspective of the player who's move it is
-        # modification to alpha-zero: average value and q_value
-        reward = board.training_reward()
-        for idx, player in enumerate(player_list):
-            # value = (reward + q_list[idx]) / 2
-            # value = value if player == CONST.WHITE else -value
+
+        # ===========================================  check if there are still boards with running games
+        all_terminated = True
+        for mcts_ctx in mcts_list:
+            if not mcts_ctx.board.terminal:
+                all_terminated = False
+                break
+
+
+    # =========================================== add the training example
+    for i_mcts_ctx, mcts_ctx in enumerate(mcts_list):
+        reward = mcts_ctx.board.training_reward()
+        for i_player, player in enumerate(player_list[i_mcts_ctx]):
             value = reward if player == CONST.WHITE else -reward
 
             # save the training example
             training_expl_list.append({
-                "state": state_list[idx],
-                "state_id": state_id_list[idx],
-                "player": player_list[idx],
-                "policy": policy_list[idx],
+                "state": state_list[i_mcts_ctx][i_player],
+                "state_id": state_id_list[i_mcts_ctx][i_player],
+                "player": player,
+                "policy": policy_list[i_mcts_ctx][i_player],
                 "value": value
             })
 
-    # delete the network
+
+    # free up some resources
     del net
+    del mcts_list
     torch.cuda.empty_cache()
 
     return training_expl_list

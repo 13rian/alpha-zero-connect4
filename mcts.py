@@ -38,9 +38,14 @@ class MCTS:
         """
 
         # perform the tree search
-        for _ in range(mc_sim_count):
+        for sim in range(mc_sim_count):
             sim_board = board.clone()
             self.tree_search(sim_board, position_cache, net, alpha_dirich)
+            # print("sim: ", sim)
+            # print("Q: ", self.Q)
+            # print("N_s", self.N_s)
+            # print("N_sa", self.N_sa)
+            # print(" ")
 
         s = board.state_id()
         counts = [self.N_sa[(s, a)] if (s, a) in self.N_sa else 0 for a in range(CONST.BOARD_WIDTH)]
@@ -76,7 +81,7 @@ class MCTS:
         :param position_cache:  holds positions already evaluated by the network
         :param net:             neural network that approximates the policy and the value
         :param alpha_dirich:    alpha parameter for the dirichlet noise that is added to the root node probabilities
-        :return: 
+        :return:                the true value of the position
         """
 
         # check if the game is terminal    
@@ -99,9 +104,10 @@ class MCTS:
                 self.P[s], v = net(batch)
                 self.P[s] = self.P[s].detach().squeeze().cpu().numpy()
                 v = v.item()
+                # v = random.uniform(0, 1) * 2 - 1
 
                 # ensure that the summed probability of all valid moves is 1
-                legal_moves = np.array(board.legal_moves)
+                legal_moves = np.array(board.legal_moves())
                 legal_move_indices = np.zeros(CONST.BOARD_WIDTH)
                 legal_move_indices[legal_moves] = 1
                 self.P[s] = self.P[s] * legal_move_indices
@@ -114,19 +120,22 @@ class MCTS:
                     print("warning: total probabilities estimated by the network for all legal moves is smaller than 0")
                     self.P[s][legal_moves] = 1 / len(legal_moves)
 
-                # add the position to the position cache
+                # add the position to the position cache, the value from the network is always from the current player
+                if board.player == CONST.BLACK:
+                    v = -v
                 position_cache[s] = (self.P[s], v)
 
             self.N_s[s] = 0
             return v
 
         # add dirichlet noise to the root node
+        legal_moves = board.legal_moves()
         p_s = self.P[s]
         if alpha_dirich > 0:
             p_s = np.copy(p_s)
-            alpha_params = alpha_dirich * np.ones(len(board.legal_moves))
+            alpha_params = alpha_dirich * np.ones(len(legal_moves))
             dirichlet_noise = np.random.dirichlet(alpha_params)
-            p_s[board.legal_moves] = 0.75 * p_s[board.legal_moves] + 0.25 * dirichlet_noise
+            p_s[legal_moves] = 0.75 * p_s[legal_moves] + 0.25 * dirichlet_noise
 
             # normalize the probabilities again
             total_prob = np.sum(p_s)
@@ -135,7 +144,7 @@ class MCTS:
         # choose the action with the highest upper confidence bound
         max_ucb = -float("inf")
         action = -1
-        for a in board.legal_moves:
+        for a in legal_moves:
             if (s, a) in self.Q:
                 u = self.Q[(s, a)] + self.c_puct * p_s[a] * math.sqrt(self.N_s[s]) / (1 + self.N_sa[(s, a)])
             else:

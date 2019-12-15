@@ -2,7 +2,7 @@
 
 
 ## Goal of this Project 
-As a chess player Alpha Zero immediately fascinated me after I saw some games in 2017 that were played against Stockfish one of the strongest engines at the time. Alpha Zero played like like humans would love to play, like Garry Kasparov on steroids. As it is simply not possible to train Alpha Zero for chess with my limited computational resources I chose Connect4 as a model game. It is theoretically solved and has around 4.5 billion of legal games states. This makes it enough complex to be still interesting and the trained networks can directly be benchmarked against an optimal player.  
+As a chess player Alpha Zero immediately fascinated me after I saw some games in 2017 that were played against Stockfish one of the strongest engines at the time. Alpha Zero played like like humans would love to play, like Garry Kasparov on steroids. As it is simply not possible to train Alpha Zero for chess with my limited computational resources I chose Connect4 as a model game. It is theoretically solved and has around 4.5 trillion of legal games states. This makes it enough complex to be still interesting and the trained networks can directly be benchmarked against an optimal player.  
 
 
 

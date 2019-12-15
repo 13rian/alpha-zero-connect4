@@ -1,5 +1,6 @@
 import random
 import copy
+import torch
 
 import numpy as np
 
@@ -31,7 +32,7 @@ class BitBoard:
         self.player = CONST.WHITE                   # disk of the player to move
         self.terminal = False                       # is the game finished
         self.score = 0                              # -1 if black wins, 0 if it is a tie and 1 if white wins
-        self.legal_moves = [0, 1, 2, 3, 4, 5, 6]
+        # self.legal_moves = [0, 1, 2, 3, 4, 5, 6]
         
         
     def clone(self):
@@ -107,8 +108,8 @@ class BitBoard:
         if self.player == CONST.BLACK:
             self.position = self.position ^ self.disk_mask
 
-        # calculate all legal moves and disks to flip
-        self.__calc_legal_moves__()
+        # # calculate all legal moves and disks to flip
+        # self.__calc_legal_moves__()
 
         # check the game states
         self.check_win(self.position)
@@ -127,8 +128,8 @@ class BitBoard:
         self.move_count = utils.popcount(disk_mask)
         self.player = self.move_count % 2
 
-        # calculate all legal moves and disks to flip
-        self.__calc_legal_moves__()
+        # # calculate all legal moves and disks to flip
+        # self.__calc_legal_moves__()
 
         # check the game states
         self.check_win(self.position)
@@ -150,7 +151,9 @@ class BitBoard:
         """
 
         white_board = self.int_to_board(self.get_white_position())
+        white_board = np.rot90(white_board, 1)
         black_board = self.int_to_board(self.get_black_position())
+        black_board = np.rot90(black_board, 1)
         board = np.add(white_board * (CONST.WHITE + 1), black_board * (CONST.BLACK + 1))
         return board
 
@@ -159,7 +162,9 @@ class BitBoard:
     def white_perspective(self):
         """
         returns the board from the white perspective. If it is white's move the normal board representation is returned.
-        If it is black's move the white and the black pieces are swapped.
+        if it is black's move the white and the black pieces are swapped.
+        the board is rotated by 90° in order to avoid the expensive rotation operation, the disks are played from the
+        right side.
         :return:
         """
 
@@ -167,17 +172,17 @@ class BitBoard:
         black_board = self.int_to_board(self.get_black_position())
         if self.player == CONST.WHITE:
             bit_board = np.stack((white_board, black_board), axis=0)
-            player = CONST.WHITE
         else:
             bit_board = np.stack((black_board, white_board), axis=0)
-            player = CONST.BLACK
 
-        return bit_board, player
+        return bit_board, self.player
     
 
     def int_to_board(self, number):
         """
         creates the 6x7 bitmask that is represented by the passed integer
+        the board will be rotated by 90° in order to avoid the expensive
+        rotation operation
         :param number:      move on the board
         :return:            6x7 matrix representing the board
         """
@@ -190,8 +195,11 @@ class BitBoard:
 
         byte_arr = np.array([row_number], dtype=np.uint64).view(np.uint8)
         board_mask = np.unpackbits(byte_arr).reshape(-1, 8)[0:7, ::-1][:, 0:6]
-        board_mask = np.rot90(board_mask, 1)
+        # board_mask = np.rot90(board_mask, 1)
         return board_mask
+
+        # bits = np.array(list(np.binary_repr(number).zfill(49))).astype(np.int8)
+        # return bits.reshape((7, 7))[:, 1:]
     
     
     def state_id(self):
@@ -225,7 +233,7 @@ class BitBoard:
         :return:
         """
         column = int(column)
-        old_mask = self.disk_mask
+        # old_mask = self.disk_mask
         self.position = self.position ^ self.disk_mask                              # get position of the opponent
         self.disk_mask = self.disk_mask | (self.disk_mask + (1 << (column * 7)))
 
@@ -233,9 +241,9 @@ class BitBoard:
         self.check_win(self.position ^ self.disk_mask)
         self.player = self.move_count % 2
 
-        # check if the upper row was set
-        if (old_mask ^ self.disk_mask) & upper_row_mask:
-            self.legal_moves.remove(column)
+        # # check if the upper row was set
+        # if (old_mask ^ self.disk_mask) & upper_row_mask:
+        #     self.legal_moves.remove(column)
 
         if self.move_count == 42:
             self.terminal = True
@@ -251,27 +259,37 @@ class BitBoard:
             self.terminal = True
             self.score = 1 if self.player == CONST.WHITE else -1
 
+    def legal_moves(self):
+        legal_moves = []
+        for i in range(CONST.BOARD_WIDTH):
+            top_mask = (1 << (CONST.BOARD_HEIGHT - 1)) << i * (CONST.BOARD_HEIGHT + 1)
+            if (self.disk_mask & top_mask) == 0:
+                legal_moves.append(i)
+
+        return legal_moves
+
 
     def is_legal_move(self, move):
-        if move in self.legal_moves:
+        if move in self.legal_moves():
             return True
         else:
             return False
 
 
     def random_move(self):
-        if len(self.legal_moves) > 0:
-            index = random.randint(0, len(self.legal_moves) - 1)
-            return self.legal_moves[index]
+        legal_moves = self.legal_moves()
+        if len(legal_moves) > 0:
+            index = random.randint(0, len(legal_moves) - 1)
+            return legal_moves[index]
         else:
             return None
             
 
-    def __calc_legal_moves__(self):
-        self.legal_moves = []
-        for idx, val in enumerate([5, 12, 19, 26, 33, 40, 47]):
-            if not self.disk_mask & (1 << val):
-                self.legal_moves.append(idx)
+    # def __calc_legal_moves__(self):
+    #     self.legal_moves = []
+    #     for idx, val in enumerate([5, 12, 19, 26, 33, 40, 47]):
+    #         if not self.disk_mask & (1 << val):
+    #             self.legal_moves.append(idx)
      
 
     def four_in_a_row(self, position):
@@ -305,6 +323,14 @@ class BitBoard:
         return False
 
 
+    def illegal_moves(self):
+        illegal_moves = []
+        for idx, val in enumerate([5, 12, 19, 26, 33, 40, 47]):
+            if self.disk_mask & (1 << val):
+                illegal_moves.append(idx)
+        return illegal_moves
+
+
     def set_player_white(self):
         self.player = CONST.WHITE
         
@@ -324,11 +350,7 @@ class BitBoard:
                     0 if the game is drawn or the game is still running
                     1 if white has won
         """
-
-        if not self.terminal:
-            return 0        
-        else:
-            return self.score
+        return self.score
 
 
     def training_reward(self):
@@ -336,17 +358,10 @@ class BitBoard:
         returns the reward for training
         :return:
         """
-
-        if not self.terminal:
-            return 0
-        else:
-            return self.score
+        return self.score
 
         # the reward below prefers quick wins over slow wins
-        # if not self.terminal:
-        #     return 0
-        # else:
-        #     return self.score * (1.18 - (9*self.move_count) / 350)
+        # return self.score * (1.18 - (9*self.move_count) / 350)
 
 
     def white_score(self):
@@ -357,6 +372,12 @@ class BitBoard:
     def black_score(self):
         reward = self.reward()
         return (-reward + 1) / 2
+
+
+    def network_prediction(self, net, torch_device):
+        batch, _ = self.white_perspective()
+        batch = torch.Tensor(batch).unsqueeze(0).to(torch_device)
+        return net(batch)
 
 
 

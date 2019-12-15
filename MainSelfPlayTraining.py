@@ -1,40 +1,43 @@
-import torch.multiprocessing as mp
-import matplotlib.pyplot as plt
 import random
 import time
 import logging
 
-from utils import utils
+import matplotlib.pyplot as plt
+import numpy as np
 
+from globals import Config
+from utils import utils
 import alpha_zero_learning
 import data_storage
 import networks
-from globals import Globals, Config
 
 
-# @utils.profile
-def mainTrain():
+#@utils.profile
+def main_az():
     # The logger
     utils.init_logger(logging.DEBUG, file_name="log/connect4.log")
     logger = logging.getLogger('Connect4')
 
     # set the random seed
     random.seed(a=None, version=2)
+    np.random.seed(seed=None)
 
-    # initialize the pool
-    Globals.pool = mp.Pool(processes=Globals.n_pool_processes)
 
     # create the storage object
     training_data = data_storage.load_data()
 
     # create the agent
-    # network = networks.ConvNet(learning_rate, n_filters, dropout)
-    network = networks.ResNet(Config.learning_rate, Config.n_blocks, Config.n_filters)
+    network = networks.ResNet(Config.learning_rate, Config.n_blocks, Config.n_filters, Config.weight_decay)
     agent = alpha_zero_learning.Agent(network)
 
     if training_data.cycle == 0:
         logger.debug("create a new agent")
-        training_data.save_data(agent.network)      # save the generation 0 network
+        training_data.save_data(agent.network)              # save the generation 0 network
+
+        if Config.use_initial_data:
+            logger.debug("fill the experience buffer with some initial data")
+            agent.experience_buffer.fill_with_initial_data()    # add training examples of untrained network
+
     else:
         # load the current network
         logger.debug("load an old network")
@@ -45,14 +48,14 @@ def mainTrain():
     for i in range(training_data.cycle, Config.cycle_count, 1):
         ###### self play and update: create some game data through self play
         logger.info("start playing games in cycle {}".format(i))
-        avg_moves_played = agent.play_self_play_games(training_data.network_path, i)
+        avg_moves_played = agent.play_self_play_games(training_data.network_path)
         training_data.avg_moves_played.append(avg_moves_played)
-        print("average moves played: ", avg_moves_played)
+        logger.debug("average moves played: {}".format(avg_moves_played))
 
 
         ###### training, train the training network and use the target network for predictions
         logger.info("start updates in cycle {}".format(i))
-        loss_p, loss_v = agent.nn_update()
+        loss_p, loss_v = agent.nn_update(i)
         training_data.policy_loss.append(loss_p)
         training_data.value_loss.append(loss_v)
         logger.debug("policy loss: {}".format(loss_p))
@@ -100,6 +103,6 @@ def mainTrain():
 
 
 if __name__ == '__main__':
-    mainTrain()
+    main_az()
 
 
