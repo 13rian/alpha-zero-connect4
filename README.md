@@ -1,8 +1,9 @@
-# Alpha Zero for Connect4
+# Alpha Zero for Connect Four
+
 
 
 ## Goal of this Project 
-As a chess player Alpha Zero immediately fascinated me after I saw some games in 2017 that were played against Stockfish one of the strongest engines at the time. Alpha Zero played like like humans would love to play, like Garry Kasparov on steroids. As it is simply not possible to train Alpha Zero for chess with my limited computational resources I chose Connect4 as a model game. It is theoretically solved and has around 4.5 trillion of legal games states. This makes it enough complex to be still interesting and the trained networks can directly be benchmarked against an optimal player.  
+As a chess player Alpha Zero immediately fascinated me after I saw some games in 2017 that were played against Stockfish one of the strongest engines at the time. Alpha Zero played like like humans would love to play, like Garry Kasparov on steroids. As it is simply not possible to train Alpha Zero for chess with my limited computational resources I chose Connect Four as a model game. It is theoretically solved and has around 4.5 trillion of legal games states. This makes it enough complex to be still interesting and the trained networks can directly be benchmarked against an optimal player.  
 
 
 
@@ -19,7 +20,7 @@ The beauty about Alpha Zero is that absolutely no human knowledge is needed in o
 
 
 #### *The neural network*
-DeepMind used a deep convolutional residual neural network with 19 blocks and 256 3x3 filters. Since Connect4 is a much simple game and than chess and the training process should not take too long only 10 blocks with 128 3x3 convolutional filters are used in this project.  
+DeepMind used a deep convolutional residual neural network with 19 blocks and 256 3x3 filters. Since Connect Four is a much simple game and than chess and the training process should not take too long only 10 blocks with 128 3x3 convolutional filters are used in this project.  
 
 
 ###### Input Representation
@@ -27,7 +28,7 @@ The input of the network is always the current game state from the perspective o
 
 
 ###### Output Representation 
-After the residual blocks the network splits into two heads, a policy and a value head. The policy output of the network consists of a vector describing the probability over all possible actions. For Connect4 the policy can be described by a 7 dimensional vector because there are 7 possible columns in which a disk can be played. The value output of the network is a continuous value between -1 and 1 representing the outcome of the game for the current player where -1 means loss, 0 means draw and 1 means win. The value is also from the perspective of the red player. If it is yellow's a value output of 1 means that the yellow player will win with a probability of 100%. If on the other hand it is red's move a value output of 1 means that red will win win.  
+After the residual blocks the network splits into two heads, a policy and a value head. The policy output of the network consists of a vector describing the probability over all possible actions. For Connect Four the policy can be described by a 7 dimensional vector because there are 7 possible columns in which a disk can be played. The value output of the network is a continuous value between -1 and 1 representing the outcome of the game for the current player where -1 means loss, 0 means draw and 1 means win. The value is also from the perspective of the red player. If it is yellow's a value output of 1 means that the yellow player will win with a probability of 100%. If on the other hand it is red's move a value output of 1 means that red will win win.  
 
 
 ###### Training Loss 
@@ -38,7 +39,7 @@ The loss is a combination of the value and the policy loss. For the value head t
  
 
 #### *Monte-Carlo Tree Search*
-Monte-Carlo Tree Search is a heuristic search algorithm. The idea is to treat the game like a tree. The current state of the game is the root node. By taking legal moves nodes of the tree can be reached that each represent a legal game state. Theoretically the whole tree of the game could be expanded to find the optimal move for the current state (Minimax algorithm). This is possible for very small games such as Tic Tac Toe and yes Connect4 as well but for larger games this is simply not doable. In pure Monte-Carlo search you would just play a number of rollouts (make simulations until you reach the end of the game). The moves are picked randomly. After the rollout were performed you choose the move with the highest win probability. After you reached the new position you repeat the process. If you make an infinite number of simulations this strategy will lead to best play. In games with an exponential growing tree such as chess it will not lead to good results as far too many simulations are needed.  
+Monte-Carlo Tree Search is a heuristic search algorithm. The idea is to treat the game like a tree. The current state of the game is the root node. By taking legal moves nodes of the tree can be reached that each represent a legal game state. Theoretically the whole tree of the game could be expanded to find the optimal move for the current state (Minimax algorithm). This is possible for very small games such as Tic Tac Toe and yes Connect Four as well but for larger games this is simply not doable. In pure Monte-Carlo search you would just play a number of rollouts (make simulations until you reach the end of the game). The moves are picked randomly. After the rollout were performed you choose the move with the highest win probability. After you reached the new position you repeat the process. If you make an infinite number of simulations this strategy will lead to best play. In games with an exponential growing tree such as chess it will not lead to good results as far too many simulations are needed.  
 
 One improvement is to use an upper confidence bound during the tree search given by,  
   
@@ -78,7 +79,7 @@ This parameter controls the exploration in the tree search. The higher it is the
 
 
 ###### Dirichlet parameter alpha
-During the self-play phase in the MCTS the agent chooses moves according to the policy calculated by the network. Dirichlet noise is added to the probability of the root node in order to increase exploration. The dirichlet noise is only added for training and not for the evaluation. The larger alpha the more the agent explores. In the Alpha Zero paper it looks like the parameter was chosen by 10 / n, where n is the number of possible moves. In Connect4 there are 7 possible moves to play and alpha = 1 seemed to work the best. 
+During the self-play phase in the MCTS the agent chooses moves according to the policy calculated by the network. Dirichlet noise is added to the probability of the root node in order to increase exploration. The dirichlet noise is only added for training and not for the evaluation. The larger alpha the more the agent explores. In the Alpha Zero paper it looks like the parameter was chosen by 10 / n, where n is the number of possible moves. In Connect Four there are 7 possible moves to play and alpha = 1 seemed to work the best. 
 
 
 ###### Temperature tau
@@ -101,18 +102,26 @@ As always in deep learning picking the right learning rate and batch size for tr
 <img src="/results/adam_p_256.png" alt="drawing" width="570"/> 
 <img src="/results/adam_v_256.png" alt="drawing" width="570"/>
 
-The plots above would suggest a minimal learning rate of 10-5 and a maximal learning rate of 10-4. For training a fixed learning rate of 10-4 was chosen although 10-3 also worked pretty well. For cyclical learning the minimal learning rate was set to 10-5 and the maximal learning rate to 10-4. A triangular learning rate schedule was chosen that restarts in every epoch.
+The plots above would suggest a minimal learning rate of 10<sup>-5</sup> and a maximal learning rate of 10-4. For training a fixed learning rate of 10<sup>-4</sup> was chosen although 10<sup>-3</sup> also worked pretty well. For cyclical learning the minimal learning rate was set to 10<sup>-5</sup> and the maximal learning rate to 10<sup>-4</sup>. A triangular learning rate schedule was chosen that restarts in every epoch.
 
 
 
 ###### Weight decay
-To prevent overfitting of the network weight decay was used. The weight decay parameter was set to 10-4.
+To prevent overfitting of the network weight decay was used. The weight decay parameter was set to 10<sup>-4</sup>.
 
+
+### Evaluation
+In order to check whether the network learned something, it is necessary to have some single role number to verify the play strength. As Connect Four is small enough the best best move(s) of any position can be calculated with the minimax algorithm. To measure the strength of the AlphaZero some random positions with a move count form 2-40 were created. A move is optimal when it leads to a win or a draw if the position is drawn. In this setting a move that wins is correct even if there is another move that wins with less moves. Lost positions were filtered out of the test set because it is not clear what the optimal move is, all moves are losing. A Connect Four solver was used to find the optimal move of these positions. With this test set the following three error were measured to estimated the playing strength:  
+- mean squared error of network value prediction and the true score of the position
+- the error of the network move prediction and the true best move.
+- the error of the move prediction with mcts and the true best move.
+
+The error of the move prediction was done by taking the maximal value of the policy prediction. If this matches the true best move the prediction is correct, if not the prediction is wrong. 
 
 
 
 ### Improvements
-In this [article](https://medium.com/oracledevs/lessons-from-alpha-zero-part-6-hyperparameter-tuning-b1cfcbe4ca9a) some improvement are described that worked very well for Connect4. For completeness the strategies that were used in this project are described shortly below. They were not part of the original AlphaZero paper.
+In this [article](https://medium.com/oracledevs/lessons-from-alpha-zero-part-6-hyperparameter-tuning-b1cfcbe4ca9a) some improvement are described that worked very well for Connect Four. For completeness the strategies that were used in this project are described shortly below. They were not part of the original AlphaZero paper.
 
 ###### Position Averaging
 Each self-play game will start form the beginning. Therefore there are many position duplicates in the training set. If 200 games are played there are 200 training examples with the same state but different policies and different values (1, 0 or -1). It might not be a good idea to present the same training example with different labels. In practice the network will learn to average the position but it is pretty easy to do and improves learning. Before training all duplicate positions were averaged. This way there are only unique positions in the training set. There are usually around 30%-40% or more of duplicate positions in the training set.
@@ -128,10 +137,26 @@ At the beginning there is not much data and the neural network might be overfitt
 
 
 
-
-
 ### Results
+Below the policy and the value loss of the two network heads during training can be seen. 
 
+
+Below are the results of the training progress.
+
+###### Value Error
+<img src="/results/value_error.png" alt="drawing" width="570"/> 
+
+The plot shows the mean squared error of the true score of the position if both players continue to play optimally and the value prediction of the network. This value is either -1, 0 or 1. The error is clearly dropping during training which helps in the MCTS to get more accurate simulations by a better value estimation.
+
+###### Move Prediction Error
+<img src="/results/net_prediction_error.png" alt="drawing" width="570"/> 
+
+In the plot above the move prediction error can be seen. A move prediction is correct when the maximal value of the predicted policy is an optimal move of the position. 
+
+###### MCTS Move Prediction Error
+<img src="/results/mcts_prediction_error.png" alt="drawing" width="570"/> 
+
+In this plot the move prediction error with MCTS can be seen. This is the true test because the network prediction without the simulation will get better because the network learns legal moves and better moves because of the MCTS results. It can be seen that the MCTS error drops during training. This means when we used the newest generation network the moves can be predicted a lot better than with a random network. This is the real proof that the AlphaZero agent learned something. The final error is around 3 %. This is a pretty impressive result. It means that the agent will make a non optimal move every 33 moves. This is for completely random positions. I suspect that the network will preform better in positions that occur in sensible games as they are more likely to appear in the self-play phase as well.  
 
 
 ### How to run
