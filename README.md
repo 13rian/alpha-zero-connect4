@@ -159,6 +159,14 @@ In the plot above the move prediction error can be seen. A move prediction is co
 In this plot the move prediction error with MCTS can be seen. This is the true test because the network prediction without the simulation will get better because the network learns legal moves and better moves because of the MCTS results. It can be seen that the MCTS error drops during training. This means when we used the newest generation network the moves can be predicted a lot better than with a random network. This is the real proof that the AlphaZero agent learned something. The final error is around 3 %. This is a pretty impressive result. It means that the agent will make a non optimal move every 33 moves. This is for completely random positions. I suspect that the network will preform better in positions that occur in sensible games as they are more likely to appear in the self-play phase as well.  
 
 
+### Further Improvements
+- Parallel MCTS could be implemented in order to accelerate to find the policy in the gui. The self-play is almost as fast as it can get because multiple examples are collected during the self-play phase and fed together through the network. This give a huge performance improvement because inference of multiple training example has around the same speed than inference of one training example. At least to a certain batch number since inference is parallelized on the GPU by Pytorch.
+- A larger network could be trained to get even better results.
+- The number of MCTS simulations can be increased to further improve the performance. However this is computationally very costly and will have a large impact on the time needed to train an agent. 
+- Use the implementation on a more complex game.
+- Implement parallel training and self-play with multiple GPUs. 
+
+
 ### How to run
 
 In order to run the algorithms  
