@@ -29,7 +29,7 @@ np.random.seed(seed=None)
 c_puct = 4
 temp = 0
 mcts_sim_count = 200
-test_set_path = "../test_set/positions.csv"
+test_set_path = "../test_set/training_set.csv"
 network_dir = "../networks/"                   # directory in which the networks are saved
 
 print("pytorch version: ", torch.__version__)

@@ -42,8 +42,8 @@ def main_lr():
     Config.n_blocks = 10
     Config.n_filters = 128
     epochs = 8
-    csv_training_set_path = "../training_set/positions.csv"
-    csv_test_set_path = "../training_set/positions.csv"
+    csv_training_set_path = "../data_sets/training_set.csv"
+    csv_test_set_path = "../data_sets/training_set.csv"
 
 
     # load the test set
@@ -64,7 +64,7 @@ def main_lr():
     params = {
         'batch_size': Config.batch_size,
         'shuffle': True,
-        'num_workers': 6,
+        'num_workers': 2,
         'pin_memory': True,
         'drop_last': True,
     }
