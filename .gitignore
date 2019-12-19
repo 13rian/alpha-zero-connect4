@@ -1,8 +1,12 @@
 .idea
 *.pt
 *.pkl
+*.png
+*.npy
 /log
 log/
 __pycache__/
 .project
 .pydevproject
+/test_set
+/training_set

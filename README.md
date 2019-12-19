@@ -138,7 +138,7 @@ At the beginning there is not much data and the neural network might be overfitt
 
 
 ### Results
-Below the policy and the value loss of the two network heads during training can be seen. 
+The results below were produced with 200 Monte-Carlo tree search simulations. Below the policy and the value loss of the two network heads during training can be seen. 
 
 
 Below are the results of the training progress.
@@ -149,14 +149,12 @@ Below are the results of the training progress.
 The plot shows the mean squared error of the true score of the position if both players continue to play optimally and the value prediction of the network. This value is either -1, 0 or 1. The error is clearly dropping during training which helps in the MCTS to get more accurate simulations by a better value estimation.
 
 ###### Move Prediction Error
-<img src="/results/net_prediction_error.png" alt="drawing" width="570"/> 
+<img src="/results/move_prediction_error.png" alt="drawing" width="570"/> 
 
-In the plot above the move prediction error can be seen. A move prediction is correct when the maximal value of the predicted policy is an optimal move of the position. 
+In the plot above the move prediction error if only the network is used and the two predictions with 200 and 800 Monte-Carlo simulations can be seen. The curve with the 800 simulations was generated with a network that was trained with 200 simulations. The simulation count was only increased during the evaluation. A move prediction is correct when the maximal value of the predicted policy is an optimal move of the position. 
 
-###### MCTS Move Prediction Error
-<img src="/results/mcts_prediction_error.png" alt="drawing" width="570"/> 
 
-In this plot the move prediction error with MCTS can be seen. This is the true test because the network prediction without the simulation will get better because the network learns legal moves and better moves because of the MCTS results. It can be seen that the MCTS error drops during training. This means when we used the newest generation network the moves can be predicted a lot better than with a random network. This is the real proof that the AlphaZero agent learned something. The final error is around 3 %. This is a pretty impressive result. It means that the agent will make a non optimal move every 33 moves. This is for completely random positions. I suspect that the network will preform better in positions that occur in sensible games as they are more likely to appear in the self-play phase as well.  
+The prediction error with the Monte-Carlo simulations is the true test because the network prediction without the simulation will get better as the network learns legal moves and better moves because of the MCTS results. It can be seen that the MCTS error drops during training. This means when we used the newest generation network the moves can be predicted a lot better than with a random network. This is the real proof that the AlphaZero agent really learned something. The final error is around 3 %. This is a pretty impressive result. It means that the agent will make a non optimal move every 33 moves. This is for completely random positions. I suspect that the network will preform better in positions that occur in sensible games as they are more likely to appear in the self-play phase as well.  
 
 
 ### Further Improvements
@@ -165,6 +163,7 @@ In this plot the move prediction error with MCTS can be seen. This is the true t
 - The number of MCTS simulations can be increased to further improve the performance. However this is computationally very costly and will have a large impact on the time needed to train an agent. 
 - Use the implementation on a more complex game.
 - Implement parallel training and self-play with multiple GPUs. 
+- During the training process always all training examples in the experience buffer were used for the training. It is more common in reinforcement learning to sample a subset from the experience buffer for training. With a bit more training examples this approach could improve training. 
 
 
 ### How to run

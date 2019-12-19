@@ -87,10 +87,19 @@ def main_lr():
         value_errors.append(value_error)
 
 
+    # save the results
+    np.save("learning_rates.npy", np.array(learning_rates))
+    np.save("lr_policy_error.npy", np.array(prediction_errors))
+    np.save("lr_value_error.npy", np.array(value_errors))
+
+    # set the style of the plot
+    plt.style.use('seaborn-dark-palette')
 
     # policy prediction error
     fig1 = plt.figure(1)
     plt.semilogx(learning_rates, prediction_errors)
+    axes = plt.gca()
+    axes.grid(True, color=(0.9, 0.9, 0.9))
     plt.title("Move Prediction Error")
     plt.xlabel("Learning Rate")
     plt.ylabel("Prediciton Error")
@@ -100,6 +109,8 @@ def main_lr():
     # value prediction error
     fig2 = plt.figure(2)
     plt.semilogx(learning_rates, value_errors)
+    axes = plt.gca()
+    axes.grid(True, color=(0.9, 0.9, 0.9))
     plt.title("Position Value Error")
     plt.xlabel("Learning Rate")
     plt.ylabel("Value Error")

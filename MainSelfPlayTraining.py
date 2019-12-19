@@ -75,27 +75,42 @@ def main_az():
 
 
 
+    # save the results
+    np.save("value_loss.npy", np.array(training_data.value_loss))
+    np.save("policy_loss.npy", np.array(training_data.policy_loss))
+    np.save("avg_moves.npy", np.array(training_data.avg_moves_played))
+
+
+    # set the style of the plot
+    plt.style.use('seaborn-dark-palette')
+
     # plot the value training loss
     fig1 = plt.figure(1)
     plt.plot(training_data.value_loss)
+    axes = plt.gca()
+    axes.grid(True, color=(0.9, 0.9, 0.9))
     plt.title("Average Value Training Loss")
-    plt.xlabel("Iteration Cycle")
+    plt.xlabel("Generation")
     plt.ylabel("Value Loss")
     fig1.show()
 
     # plot the training policy loss
     fig2 = plt.figure(2)
     plt.plot(training_data.policy_loss)
+    axes = plt.gca()
+    axes.grid(True, color=(0.9, 0.9, 0.9))
     plt.title("Average Policy Training Loss")
-    plt.xlabel("Iteration Cycle")
+    plt.xlabel("Generation")
     plt.ylabel("Policy Loss")
     fig2.show()
 
     # plot the average number of moves played in the self-play games
     fig3 = plt.figure(3)
     plt.plot(training_data.avg_moves_played)
+    axes = plt.gca()
+    axes.grid(True, color=(0.9, 0.9, 0.9))
     plt.title("Average Moves in Self-Play Games")
-    plt.xlabel("Iteration Cycle")
+    plt.xlabel("Generation")
     plt.ylabel("Move Count")
     fig3.show()
 
