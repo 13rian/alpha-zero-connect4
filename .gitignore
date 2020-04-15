@@ -1,7 +1,6 @@
 .idea
 *.pt
 *.pkl
-*.png
 *.npy
 /log
 log/
